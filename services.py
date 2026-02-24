@@ -3,7 +3,7 @@ Módulo de serviços e lógica de negócio
 Contém todas as operações relacionadas a materiais, parceiros e transações
 """
 
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from db import execute_query, execute_insert, execute_update
 
@@ -586,4 +586,165 @@ def get_material_summary(
 
     query += " GROUP BY m.id, m.name HAVING (weight_in > 0 OR weight_out > 0) ORDER BY profit DESC"
 
+    return execute_query(query, tuple(params))
+
+
+def get_period_comparison(
+    start_date: date,
+    end_date: date
+) -> Dict[str, Any]:
+    """
+    Retorna métricas do período atual e do período anterior (mesma duração) para comparação.
+    """
+    delta = end_date - start_date
+    prev_end = start_date - timedelta(days=1)
+    prev_start = prev_end - delta
+
+    query = """
+        SELECT
+            COALESCE(SUM(CASE WHEN type = 'entrada' THEN total_value END), 0) as compras,
+            COALESCE(SUM(CASE WHEN type = 'saida' THEN total_value END), 0) as vendas,
+            COALESCE(SUM(CASE WHEN type = 'entrada' THEN weight_kg END), 0) as peso_in,
+            COALESCE(SUM(CASE WHEN type = 'saida' THEN weight_kg END), 0) as peso_out,
+            COUNT(*) as transacoes
+        FROM transactions
+        WHERE date >= ? AND date <= ?
+    """
+
+    def parse(rows):
+        r = rows[0] if rows else {}
+        compras = r.get('compras', 0) or 0
+        vendas = r.get('vendas', 0) or 0
+        transacoes = r.get('transacoes', 0) or 0
+        return {
+            'compras': compras,
+            'vendas': vendas,
+            'peso_in': r.get('peso_in', 0) or 0,
+            'peso_out': r.get('peso_out', 0) or 0,
+            'transacoes': transacoes,
+            'lucro': vendas - compras,
+            'margem_pct': (vendas - compras) / vendas * 100 if vendas > 0 else 0,
+            'ticket_medio': compras / transacoes if transacoes > 0 else 0,
+        }
+
+    current = parse(execute_query(query, (start_date, end_date)))
+    previous = parse(execute_query(query, (prev_start, prev_end)))
+    current['anterior'] = previous
+    current['prev_start'] = prev_start
+    current['prev_end'] = prev_end
+    return current
+
+
+def get_temporal_evolution(
+    start_date: date,
+    end_date: date,
+    granularity: str = 'month'
+) -> List[Dict[str, Any]]:
+    """
+    Retorna evolução temporal das transações agrupada por dia, semana ou mês.
+    """
+    fmt_map = {'day': '%Y-%m-%d', 'week': '%Y-W%W', 'month': '%Y-%m'}
+    fmt = fmt_map.get(granularity, '%Y-%m')
+
+    query = f"""
+        SELECT
+            strftime('{fmt}', date) as periodo,
+            COALESCE(SUM(CASE WHEN type = 'entrada' THEN total_value END), 0) as compras,
+            COALESCE(SUM(CASE WHEN type = 'saida' THEN total_value END), 0) as vendas,
+            COALESCE(SUM(CASE WHEN type = 'entrada' THEN weight_kg END), 0) as peso_comprado,
+            COALESCE(SUM(CASE WHEN type = 'saida' THEN weight_kg END), 0) as peso_vendido,
+            COUNT(*) as transacoes
+        FROM transactions
+        WHERE date >= ? AND date <= ?
+        GROUP BY periodo
+        ORDER BY periodo
+    """
+    rows = execute_query(query, (start_date, end_date))
+    for r in rows:
+        r['lucro'] = r['vendas'] - r['compras']
+    return rows
+
+
+def get_material_analysis(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+) -> List[Dict[str, Any]]:
+    """
+    Retorna análise detalhada por material com preços médios e margens.
+    """
+    date_cond = ""
+    params: list = []
+    if start_date:
+        date_cond += " AND t.date >= ?"
+        params.append(start_date)
+    if end_date:
+        date_cond += " AND t.date <= ?"
+        params.append(end_date)
+
+    query = f"""
+        SELECT
+            m.name as material,
+            COUNT(CASE WHEN t.type = 'entrada' THEN 1 END) as qtd_entradas,
+            COUNT(CASE WHEN t.type = 'saida' THEN 1 END) as qtd_saidas,
+            COALESCE(SUM(CASE WHEN t.type = 'entrada' THEN t.weight_kg END), 0) as peso_comprado,
+            COALESCE(SUM(CASE WHEN t.type = 'saida' THEN t.weight_kg END), 0) as peso_vendido,
+            COALESCE(SUM(CASE WHEN t.type = 'entrada' THEN t.total_value END), 0) as valor_compras,
+            COALESCE(SUM(CASE WHEN t.type = 'saida' THEN t.total_value END), 0) as valor_vendas,
+            COALESCE(AVG(CASE WHEN t.type = 'entrada' THEN t.price_per_kg END), 0) as preco_medio_compra,
+            COALESCE(AVG(CASE WHEN t.type = 'saida' THEN t.price_per_kg END), 0) as preco_medio_venda
+        FROM materials m
+        LEFT JOIN transactions t ON m.id = t.material_id{date_cond}
+        WHERE m.active = 1
+        GROUP BY m.id, m.name
+        HAVING (peso_comprado > 0 OR peso_vendido > 0)
+        ORDER BY valor_compras DESC
+    """
+    results = execute_query(query, tuple(params))
+    for r in results:
+        r['lucro'] = r['valor_vendas'] - r['valor_compras']
+        r['margem_pct'] = (r['lucro'] / r['valor_vendas'] * 100) if r['valor_vendas'] > 0 else 0
+        r['spread_kg'] = (
+            r['preco_medio_venda'] - r['preco_medio_compra']
+            if r['preco_medio_venda'] > 0 and r['preco_medio_compra'] > 0
+            else 0
+        )
+    return results
+
+
+def get_partner_analysis(
+    start_date: Optional[date] = None,
+    end_date: Optional[date] = None
+) -> List[Dict[str, Any]]:
+    """
+    Retorna análise por parceiro com totais de compras, vendas e volume no período.
+    """
+    date_cond = ""
+    params: list = []
+    if start_date:
+        date_cond += " AND t.date >= ?"
+        params.append(start_date)
+    if end_date:
+        date_cond += " AND t.date <= ?"
+        params.append(end_date)
+
+    query = f"""
+        SELECT
+            p.id,
+            p.name as parceiro,
+            p.type as tipo,
+            p.phone as telefone,
+            COUNT(CASE WHEN t.type = 'entrada' THEN 1 END) as qtd_entradas,
+            COUNT(CASE WHEN t.type = 'saida' THEN 1 END) as qtd_saidas,
+            COALESCE(SUM(CASE WHEN t.type = 'entrada' THEN t.weight_kg END), 0) as peso_fornecido,
+            COALESCE(SUM(CASE WHEN t.type = 'saida' THEN t.weight_kg END), 0) as peso_vendido,
+            COALESCE(SUM(CASE WHEN t.type = 'entrada' THEN t.total_value END), 0) as valor_pago,
+            COALESCE(SUM(CASE WHEN t.type = 'saida' THEN t.total_value END), 0) as valor_recebido,
+            MAX(t.date) as ultima_transacao
+        FROM partners p
+        LEFT JOIN transactions t ON p.id = t.partner_id{date_cond}
+        WHERE p.active = 1
+        GROUP BY p.id, p.name, p.type, p.phone
+        HAVING (peso_fornecido > 0 OR peso_vendido > 0)
+        ORDER BY valor_pago DESC
+    """
     return execute_query(query, tuple(params))
