@@ -15,49 +15,6 @@ if "authenticated" not in st.session_state or not st.session_state.authenticated
     st.error("⚠️ Acesso negado. Faça login na página principal.")
     st.stop()
 
-# CSS para impressão limpa
-st.markdown("""
-<style>
-@media print {
-    body * { visibility: hidden; }
-    #canhoto-print, #canhoto-print * { visibility: visible; }
-    #canhoto-print {
-        position: fixed;
-        left: 0;
-        top: 0;
-        width: 100%;
-    }
-    .no-print { display: none !important; }
-}
-.canhoto-box {
-    font-family: 'Courier New', monospace;
-    max-width: 420px;
-    margin: 20px auto;
-    border: 2px solid #333;
-    padding: 24px;
-    background: white;
-    color: black;
-    border-radius: 4px;
-}
-.canhoto-box table {
-    width: 100%;
-    border-collapse: collapse;
-}
-.canhoto-box th {
-    border-bottom: 1px solid #333;
-    padding: 4px 2px;
-    text-align: left;
-    font-size: 13px;
-}
-.canhoto-box td {
-    padding: 4px 2px;
-    font-size: 13px;
-}
-.canhoto-box .right { text-align: right; }
-.canhoto-box .center { text-align: center; }
-.canhoto-box .sep { border-top: 1px dashed #555; margin: 10px 0; }
-</style>
-""", unsafe_allow_html=True)
 
 # Inicializa estado da sessão
 if "cart_items" not in st.session_state:
@@ -250,7 +207,52 @@ elif st.session_state.operator_stage == "printing":
             </tr>"""
 
         canhoto_html = f"""
-        <div id="canhoto-print">
+        <!DOCTYPE html>
+        <html>
+        <head>
+        <meta charset="utf-8">
+        <style>
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+            body {{ background: #f0f2f6; font-family: 'Courier New', monospace; padding: 12px; }}
+            .canhoto-box {{
+                max-width: 400px;
+                margin: 0 auto;
+                border: 2px solid #333;
+                padding: 20px;
+                background: white;
+                color: black;
+                border-radius: 4px;
+            }}
+            table {{ width: 100%; border-collapse: collapse; }}
+            th {{
+                border-bottom: 1px solid #333;
+                padding: 4px 2px;
+                text-align: left;
+                font-size: 13px;
+            }}
+            td {{ padding: 4px 2px; font-size: 13px; }}
+            .right {{ text-align: right; }}
+            .center {{ text-align: center; }}
+            .sep {{ border-top: 1px dashed #555; margin: 10px 0; }}
+            .btn-print {{
+                display: block;
+                width: 100%;
+                margin-top: 14px;
+                padding: 12px;
+                font-size: 15px;
+                cursor: pointer;
+                background: #1976D2;
+                color: white;
+                border: none;
+                border-radius: 8px;
+            }}
+            @media print {{
+                body {{ background: white; padding: 0; }}
+                .btn-print {{ display: none; }}
+            }}
+        </style>
+        </head>
+        <body>
         <div class="canhoto-box">
             <div class="center">
                 <strong style="font-size:16px">DEPÓSITO DE SUCATA</strong><br>
@@ -282,31 +284,13 @@ elif st.session_state.operator_stage == "printing":
                 <strong>Apresente ao balcão</strong>
             </div>
         </div>
-        </div>
+        <button class="btn-print" onclick="window.print()">🖨️  Imprimir Canhoto</button>
+        </body>
+        </html>
         """
 
         st.success(f"✅ Canhoto **#{canhoto['number']}** gerado com sucesso!")
-        st.markdown(canhoto_html, unsafe_allow_html=True)
-
-        components.html("""
-        <button
-            onclick="window.top.print()"
-            style="
-                padding: 14px 28px;
-                font-size: 15px;
-                cursor: pointer;
-                background: #1976D2;
-                color: white;
-                border: none;
-                border-radius: 8px;
-                margin-top: 8px;
-                display: block;
-                width: 100%;
-            "
-        >
-            🖨️  Imprimir Canhoto
-        </button>
-        """, height=65)
+        components.html(canhoto_html, height=480, scrolling=False)
 
         st.markdown("---")
 
