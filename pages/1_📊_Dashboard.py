@@ -14,7 +14,7 @@ from services import (
     get_transactions
 )
 
-st.set_page_config(page_title="Dashboard", page_icon="📊", layout="wide")
+st.set_page_config(page_title="Dashboard", page_icon="📊", layout="centered")
 
 # Verifica autenticação
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
@@ -26,7 +26,7 @@ st.markdown("Visão geral do seu negócio")
 st.markdown("---")
 
 # Seletor de mês/ano para análise
-col_filter1, col_filter2 = st.columns([1, 3])
+col_filter1, col_filter2 = st.columns(2)
 
 with col_filter1:
     current_date = datetime.now()
@@ -57,15 +57,13 @@ stock_value = get_stock_value_estimate()
 
 st.markdown("### 💰 Métricas do Período")
 
-col1, col2, col3, col4 = st.columns(4)
-
+col1, col2 = st.columns(2)
 with col1:
     st.metric(
         label="Compras (Entradas)",
         value=f"R$ {metrics['total_purchases']:,.2f}",
         delta=f"{metrics['weight_in']:.0f} kg"
     )
-
 with col2:
     st.metric(
         label="Vendas (Saídas)",
@@ -73,6 +71,7 @@ with col2:
         delta=f"{metrics['weight_out']:.0f} kg"
     )
 
+col3, col4 = st.columns(2)
 with col3:
     profit = metrics['gross_profit']
     st.metric(
@@ -81,7 +80,6 @@ with col3:
         delta=f"{profit:,.2f}",
         delta_color="normal" if profit >= 0 else "inverse"
     )
-
 with col4:
     st.metric(
         label="Estoque Total Estimado",

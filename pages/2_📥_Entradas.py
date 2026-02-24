@@ -5,7 +5,7 @@ Registra a compra de materiais de fornecedores
 
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import date, timedelta
 from services import (
     get_all_materials,
     get_all_partners,
@@ -13,7 +13,7 @@ from services import (
     get_transactions
 )
 
-st.set_page_config(page_title="Entradas", page_icon="📥", layout="wide")
+st.set_page_config(page_title="Entradas", page_icon="📥", layout="centered")
 
 # Verifica autenticação
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
@@ -31,80 +31,69 @@ st.markdown("---")
 st.markdown("### ➕ Nova Entrada")
 
 with st.form("form_entrada", clear_on_submit=True):
-    col1, col2 = st.columns(2)
+    entrada_date = st.date_input(
+        "Data da Entrada",
+        value=date.today(),
+        max_value=date.today(),
+        help="Data em que a compra foi realizada"
+    )
 
-    with col1:
-        # Data da entrada
-        entrada_date = st.date_input(
-            "Data da Entrada",
-            value=date.today(),
-            max_value=date.today(),
-            help="Data em que a compra foi realizada"
-        )
+    materials = get_all_materials(active_only=True)
+    if not materials:
+        st.error("❌ Nenhum material cadastrado. Cadastre materiais primeiro.")
+        st.stop()
 
-        # Seleciona material
-        materials = get_all_materials(active_only=True)
-        if not materials:
-            st.error("❌ Nenhum material cadastrado. Cadastre materiais primeiro.")
-            st.stop()
+    material_options = {m['id']: f"{m['name']} ({m['unit']})" for m in materials}
+    selected_material = st.selectbox(
+        "Material",
+        options=list(material_options.keys()),
+        format_func=lambda x: material_options[x],
+        help="Selecione o material comprado"
+    )
 
-        material_options = {m['id']: f"{m['name']} ({m['unit']})" for m in materials}
-        selected_material = st.selectbox(
-            "Material",
-            options=list(material_options.keys()),
-            format_func=lambda x: material_options[x],
-            help="Selecione o material comprado"
-        )
+    partners = get_all_partners(active_only=True, partner_type='fornecedor')
+    if not partners:
+        st.error("❌ Nenhum fornecedor cadastrado. Cadastre parceiros primeiro.")
+        st.stop()
 
-        # Peso
+    partner_options = {
+        p['id']: f"{p['name']} ({p['phone']})" if p['phone'] else p['name']
+        for p in partners
+    }
+    selected_partner = st.selectbox(
+        "Fornecedor",
+        options=list(partner_options.keys()),
+        format_func=lambda x: partner_options[x],
+        help="Selecione o fornecedor"
+    )
+
+    col_w, col_p = st.columns(2)
+    with col_w:
         weight = st.number_input(
             "Peso (kg)",
             min_value=0.01,
             value=1.0,
             step=0.01,
             format="%.2f",
-            help="Quantidade de material em quilogramas"
+            help="Quantidade em kg"
         )
-
-    with col2:
-        # Seleciona fornecedor
-        partners = get_all_partners(active_only=True, partner_type='fornecedor')
-        if not partners:
-            st.error("❌ Nenhum fornecedor cadastrado. Cadastre parceiros primeiro.")
-            st.stop()
-
-        partner_options = {p['id']: f"{p['name']} ({p['phone']})" if p['phone'] else p['name'] for p in partners}
-        selected_partner = st.selectbox(
-            "Fornecedor",
-            options=list(partner_options.keys()),
-            format_func=lambda x: partner_options[x],
-            help="Selecione o fornecedor"
-        )
-
-        # Preço por kg
+    with col_p:
         price_per_kg = st.number_input(
-            "Preço por kg (R$)",
+            "Preço/kg (R$)",
             min_value=0.0,
             value=0.0,
             step=0.01,
             format="%.2f",
-            help="Preço pago por quilograma"
+            help="Preço pago por kg"
         )
 
-        # Calcula e mostra valor total
-        total_value = weight * price_per_kg
-        st.metric(
-            "💰 Valor Total",
-            f"R$ {total_value:,.2f}"
-        )
+    st.metric("💰 Valor Total", f"R$ {weight * price_per_kg:,.2f}")
 
-    # Observações
     notes = st.text_area(
         "Observações (opcional)",
         help="Informações adicionais sobre esta entrada"
     )
 
-    # Botão de submissão
     submitted = st.form_submit_button(
         "💾 Registrar Entrada",
         type="primary",
@@ -121,7 +110,6 @@ with st.form("form_entrada", clear_on_submit=True):
             price_per_kg=price_per_kg,
             notes=notes
         )
-
         if success:
             st.success(f"✅ {message}")
             st.balloons()
@@ -136,7 +124,6 @@ st.markdown("---")
 
 st.markdown("### 📋 Histórico de Entradas")
 
-# Filtros
 col_filter1, col_filter2, col_filter3 = st.columns(3)
 
 with col_filter1:
@@ -165,8 +152,6 @@ with col_filter3:
         format_func=lambda x: partner_filter_options[x]
     )
 
-# Busca transações
-from datetime import timedelta
 start_date = date.today() - timedelta(days=filter_days)
 
 transactions = get_transactions(
@@ -178,12 +163,9 @@ transactions = get_transactions(
 
 if transactions:
     df = pd.DataFrame(transactions)
-
-    # Calcula totais
     total_weight = df['weight_kg'].sum()
     total_value = df['total_value'].sum()
 
-    # Mostra totais
     col_total1, col_total2, col_total3 = st.columns(3)
     with col_total1:
         st.metric("Total de Entradas", len(df))
@@ -194,31 +176,17 @@ if transactions:
 
     st.markdown("#### Detalhamento")
 
-    # Formata para exibição
     df_display = df[[
         'date', 'material_name', 'partner_name',
         'weight_kg', 'price_per_kg', 'total_value', 'notes'
     ]].copy()
-
     df_display['weight_kg'] = df_display['weight_kg'].apply(lambda x: f"{x:.2f} kg")
     df_display['price_per_kg'] = df_display['price_per_kg'].apply(lambda x: f"R$ {x:.2f}/kg")
     df_display['total_value'] = df_display['total_value'].apply(lambda x: f"R$ {x:,.2f}")
-
     df_display.columns = [
-        'Data',
-        'Material',
-        'Fornecedor',
-        'Peso',
-        'Preço/kg',
-        'Valor Total',
-        'Observações'
+        'Data', 'Material', 'Fornecedor', 'Peso', 'Preço/kg', 'Valor Total', 'Observações'
     ]
-
-    st.dataframe(
-        df_display,
-        use_container_width=True,
-        hide_index=True
-    )
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
 else:
     st.info("📭 Nenhuma entrada registrada no período selecionado")
 

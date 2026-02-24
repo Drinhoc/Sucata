@@ -19,8 +19,8 @@ APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 st.set_page_config(
     page_title=APP_NAME,
     page_icon="♻️",
-    layout="wide",
-    initial_sidebar_state="expanded"
+    layout="centered",
+    initial_sidebar_state="auto"
 )
 
 
@@ -110,15 +110,13 @@ def main():
 
     st.markdown("### 📊 Métricas do Mês Atual")
 
-    col1, col2, col3, col4 = st.columns(4)
-
+    col1, col2 = st.columns(2)
     with col1:
         st.metric(
             "💰 Compras",
             f"R$ {metrics['total_purchases']:,.2f}",
             delta=f"{metrics['weight_in']:.0f} kg"
         )
-
     with col2:
         st.metric(
             "💵 Vendas",
@@ -126,14 +124,14 @@ def main():
             delta=f"{metrics['weight_out']:.0f} kg"
         )
 
+    col3, col4 = st.columns(2)
     with col3:
-        profit_color = "normal" if metrics['gross_profit'] >= 0 else "inverse"
         st.metric(
             "📈 Lucro Bruto",
             f"R$ {metrics['gross_profit']:,.2f}",
-            delta=f"{metrics['gross_profit']:,.2f}"
+            delta=f"{metrics['gross_profit']:,.2f}",
+            delta_color="normal" if metrics['gross_profit'] >= 0 else "inverse"
         )
-
     with col4:
         st.metric(
             "📦 Estoque (estimado)",

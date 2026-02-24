@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 from services import get_all_stock, get_current_stock
 
-st.set_page_config(page_title="Estoque", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Estoque", page_icon="📦", layout="centered")
 
 # Verifica autenticação
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
@@ -49,15 +49,13 @@ materials_in_stock = len(df[df['current_stock'] > 0])
 
 st.markdown("### 📊 Resumo Geral")
 
-col1, col2, col3, col4 = st.columns(4)
-
+col1, col2 = st.columns(2)
 with col1:
     st.metric(
         "Total de Materiais",
         total_materials,
         delta=f"{materials_in_stock} em estoque"
     )
-
 with col2:
     st.metric(
         "Valor em Estoque",
@@ -65,13 +63,13 @@ with col2:
         help="Valor estimado baseado no preço médio de compra"
     )
 
+col3, col4 = st.columns(2)
 with col3:
     st.metric(
         "Receita Potencial",
         f"R$ {total_potential_revenue:,.2f}",
         help="Receita potencial se vender todo o estoque ao preço médio"
     )
-
 with col4:
     st.metric(
         "Lucro Potencial",
@@ -87,7 +85,7 @@ st.markdown("---")
 # FILTROS
 # ============================================
 
-col_filter1, col_filter2 = st.columns([1, 3])
+col_filter1, col_filter2 = st.columns(2)
 
 with col_filter1:
     show_filter = st.selectbox(

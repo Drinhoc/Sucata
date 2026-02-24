@@ -1,6 +1,6 @@
 """
 Página do Operador — Atendimento ao Cliente
-Interface simplificada para registrar materiais e gerar canhotos
+Interface otimizada para mobile: registra materiais e gera canhotos
 """
 
 import streamlit as st
@@ -8,7 +8,7 @@ import streamlit.components.v1 as components
 from datetime import datetime
 from services import get_current_prices, create_canhoto, get_canhoto_with_items
 
-st.set_page_config(page_title="Operador", page_icon="🧾", layout="wide")
+st.set_page_config(page_title="Operador", page_icon="🧾", layout="centered")
 
 # Verifica autenticação
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
@@ -73,104 +73,93 @@ if "current_canhoto_id" not in st.session_state:
 # ============================================================
 if st.session_state.operator_stage == "collecting":
 
-    st.title("🧾 Operador — Novo Atendimento")
+    st.title("🧾 Novo Atendimento")
     st.markdown("---")
 
-    col_form, col_cart = st.columns([1, 1], gap="large")
+    prices_data = get_current_prices()
 
-    # ---- Formulário de adição ----
-    with col_form:
-        st.markdown("### ➕ Adicionar Item")
+    if not prices_data:
+        st.warning("⚠️ Nenhum material cadastrado. Vá em Cadastros para adicionar materiais.")
+        st.stop()
 
-        prices_data = get_current_prices()
+    material_options = {p['name']: p for p in prices_data}
 
-        if not prices_data:
-            st.warning("⚠️ Nenhum material cadastrado. Vá em Cadastros para adicionar materiais.")
-            st.stop()
+    selected_name = st.selectbox(
+        "Material",
+        list(material_options.keys()),
+        key="sel_material"
+    )
+    selected_material = material_options[selected_name]
+    price = selected_material['price_per_kg']
 
-        material_options = {p['name']: p for p in prices_data}
+    if price > 0:
+        st.info(f"💲 Preço atual: **R$ {price:.2f}/kg**")
+    else:
+        st.warning("⚠️ Material sem preço definido. Configure em **Cadastros > Preços Vigentes**.")
 
-        selected_name = st.selectbox(
-            "Material",
-            list(material_options.keys()),
-            key="sel_material"
-        )
-        selected_material = material_options[selected_name]
-        price = selected_material['price_per_kg']
+    weight = st.number_input(
+        "Peso (kg)",
+        min_value=0.01,
+        step=0.1,
+        format="%.2f",
+        key="input_weight"
+    )
 
-        if price > 0:
-            st.info(f"💲 Preço atual: **R$ {price:.2f}/kg**")
-        else:
-            st.warning("⚠️ Material sem preço definido. Configure em **Cadastros > Preços Vigentes**.")
+    if price > 0 and weight > 0:
+        st.metric("Valor calculado", f"R$ {price * weight:.2f}")
 
-        weight = st.number_input(
-            "Peso (kg)",
-            min_value=0.01,
-            step=0.1,
-            format="%.2f",
-            key="input_weight"
-        )
+    if st.button(
+        "➕  ADICIONAR AO CANHOTO",
+        type="primary",
+        use_container_width=True,
+        disabled=(price <= 0)
+    ):
+        st.session_state.cart_items.append({
+            'material_id': selected_material['id'],
+            'material_name': selected_material['name'],
+            'weight_kg': weight,
+            'price_per_kg': price,
+            'total_value': round(price * weight, 2),
+        })
+        st.rerun()
 
-        if price > 0 and weight > 0:
-            valor_calc = price * weight
-            st.metric("Valor calculado", f"R$ {valor_calc:.2f}")
-
-        add_disabled = price <= 0
-        if st.button(
-            "➕  ADICIONAR AO CANHOTO",
-            type="primary",
-            use_container_width=True,
-            disabled=add_disabled
-        ):
-            st.session_state.cart_items.append({
-                'material_id': selected_material['id'],
-                'material_name': selected_material['name'],
-                'weight_kg': weight,
-                'price_per_kg': price,
-                'total_value': round(price * weight, 2),
-            })
-            st.rerun()
+    st.markdown("---")
 
     # ---- Carrinho de itens ----
-    with col_cart:
-        st.markdown("### 🛒 Itens do Atendimento")
+    st.markdown("### 🛒 Itens do Atendimento")
 
-        if not st.session_state.cart_items:
-            st.info("Nenhum item adicionado ainda.\n\nSelecione o material e o peso ao lado.")
-        else:
-            total = 0.0
+    if not st.session_state.cart_items:
+        st.info("Nenhum item adicionado ainda.")
+    else:
+        total = 0.0
 
-            for i, item in enumerate(st.session_state.cart_items):
-                c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
-                with c1:
-                    st.write(f"**{item['material_name']}**")
-                with c2:
-                    st.write(f"{item['weight_kg']:.2f} kg")
-                with c3:
-                    st.write(f"R$ {item['total_value']:.2f}")
-                with c4:
-                    if st.button("✕", key=f"rm_{i}", help="Remover item"):
-                        st.session_state.cart_items.pop(i)
-                        st.rerun()
-                total += item['total_value']
-
-            st.divider()
-            st.markdown(f"## 💰 TOTAL: R$ {total:.2f}")
-            st.divider()
-
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                if st.button("🗑️ Limpar tudo", use_container_width=True):
-                    st.session_state.cart_items = []
+        for i, item in enumerate(st.session_state.cart_items):
+            col_info, col_rm = st.columns([5, 1])
+            with col_info:
+                st.write(f"**{item['material_name']}**")
+                st.caption(
+                    f"{item['weight_kg']:.2f} kg  ×  R$ {item['price_per_kg']:.2f}/kg"
+                    f"  =  **R$ {item['total_value']:.2f}**"
+                )
+            with col_rm:
+                if st.button("✕", key=f"rm_{i}", help="Remover item"):
+                    st.session_state.cart_items.pop(i)
                     st.rerun()
-            with col_btn2:
-                if st.button(
-                    "🖨️  GERAR CANHOTO",
-                    type="primary",
-                    use_container_width=True
-                ):
-                    st.session_state.operator_stage = "reviewing"
-                    st.rerun()
+            total += item['total_value']
+
+        st.divider()
+        st.markdown(f"## 💰 TOTAL: R$ {total:.2f}")
+        st.divider()
+
+        col_btn1, col_btn2 = st.columns(2)
+        with col_btn1:
+            if st.button("🗑️ Limpar tudo", use_container_width=True):
+                st.session_state.cart_items = []
+                st.rerun()
+        with col_btn2:
+            if st.button("🖨️  GERAR CANHOTO", type="primary", use_container_width=True):
+                st.session_state.operator_stage = "reviewing"
+                st.rerun()
 
 
 # ============================================================
@@ -185,13 +174,11 @@ elif st.session_state.operator_stage == "reviewing":
 
     total = 0.0
     for item in st.session_state.cart_items:
-        c1, c2, c3 = st.columns([3, 3, 2])
-        with c1:
-            st.write(f"**{item['material_name']}**")
-        with c2:
-            st.write(f"{item['weight_kg']:.2f} kg × R$ {item['price_per_kg']:.2f}/kg")
-        with c3:
-            st.write(f"**R$ {item['total_value']:.2f}**")
+        st.write(f"**{item['material_name']}**")
+        st.caption(
+            f"{item['weight_kg']:.2f} kg  ×  R$ {item['price_per_kg']:.2f}/kg"
+            f"  =  **R$ {item['total_value']:.2f}**"
+        )
         total += item['total_value']
 
     st.divider()
@@ -208,12 +195,12 @@ elif st.session_state.operator_stage == "reviewing":
     col_back, col_confirm = st.columns(2)
 
     with col_back:
-        if st.button("⬅️ Voltar e Editar", use_container_width=True):
+        if st.button("⬅️ Voltar", use_container_width=True):
             st.session_state.operator_stage = "collecting"
             st.rerun()
 
     with col_confirm:
-        if st.button("✅ Confirmar e Gerar Canhoto", type="primary", use_container_width=True):
+        if st.button("✅ Confirmar e Gerar", type="primary", use_container_width=True):
             canhoto_id = create_canhoto(
                 st.session_state.cart_items,
                 client_name=client_name
@@ -240,7 +227,6 @@ elif st.session_state.operator_stage == "printing":
         now_str = datetime.now().strftime("%d/%m/%Y  %H:%M")
         client_display = canhoto['client_name'] if canhoto['client_name'] else "Cliente"
 
-        # Monta as linhas da tabela de itens
         rows_html = ""
         for item in canhoto['items']:
             rows_html += f"""
@@ -290,7 +276,6 @@ elif st.session_state.operator_stage == "printing":
         st.success(f"✅ Canhoto **#{canhoto['number']}** gerado com sucesso!")
         st.markdown(canhoto_html, unsafe_allow_html=True)
 
-        # Botão de impressão via JavaScript
         components.html("""
         <button
             onclick="window.top.print()"
@@ -304,6 +289,7 @@ elif st.session_state.operator_stage == "printing":
                 border-radius: 8px;
                 margin-top: 8px;
                 display: block;
+                width: 100%;
             "
         >
             🖨️  Imprimir Canhoto
