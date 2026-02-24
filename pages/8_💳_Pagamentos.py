@@ -4,7 +4,7 @@ Confirmação de pagamento dos canhotos pendentes e histórico
 """
 
 import streamlit as st
-from services import get_canhotos, get_canhoto_with_items, confirm_canhoto, cancel_canhoto
+from services import get_canhotos, get_canhoto_with_items, confirm_canhoto, cancel_canhoto, log_action
 
 st.set_page_config(page_title="Pagamentos", page_icon="💳", layout="centered")
 
@@ -36,7 +36,7 @@ with tab_pending:
         for canhoto in pending:
             client_label = canhoto['client_name'] if canhoto['client_name'] else "Cliente Anônimo"
             created_str = (
-                canhoto['created_at'][:16].replace("T", " ")
+                canhoto['created_at'].strftime("%d/%m/%Y %H:%M")
                 if canhoto['created_at'] else ""
             )
 
@@ -66,6 +66,16 @@ with tab_pending:
                     ):
                         success, msg = confirm_canhoto(canhoto['id'])
                         if success:
+                            log_action(
+                                st.session_state.get('user_id', 0),
+                                st.session_state.get('username', '?'),
+                                "CONFIRM", "canhoto", canhoto['id'],
+                                {
+                                    "numero": canhoto['number'],
+                                    "cliente": client_label,
+                                    "valor_total": canhoto['total_value'],
+                                }
+                            )
                             st.success(msg)
                             st.rerun()
                         else:
@@ -78,6 +88,15 @@ with tab_pending:
                         use_container_width=True
                     ):
                         cancel_canhoto(canhoto['id'])
+                        log_action(
+                            st.session_state.get('user_id', 0),
+                            st.session_state.get('username', '?'),
+                            "CANCEL", "canhoto", canhoto['id'],
+                            {
+                                "numero": canhoto['number'],
+                                "cliente": client_label,
+                            }
+                        )
                         st.info("Canhoto cancelado.")
                         st.rerun()
 
@@ -107,7 +126,7 @@ with tab_history:
         for canhoto in history:
             client_label = canhoto['client_name'] if canhoto['client_name'] else "Anônimo"
             created_str = (
-                canhoto['created_at'][:16].replace("T", " ")
+                canhoto['created_at'].strftime("%d/%m/%Y %H:%M")
                 if canhoto['created_at'] else ""
             )
             status_badge = (

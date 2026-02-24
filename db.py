@@ -27,6 +27,45 @@ def init_database():
     with get_db_connection() as conn:
         cursor = conn.cursor()
 
+        # Tabela de usuários do sistema
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username TEXT NOT NULL UNIQUE,
+                name TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'operador'
+                    CHECK(role IN ('admin', 'operador')),
+                active SMALLINT NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT NOW(),
+                last_login TIMESTAMP
+            )
+        """)
+
+        # Tabela de logs de auditoria
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                username TEXT NOT NULL,
+                action TEXT NOT NULL,
+                entity TEXT NOT NULL,
+                entity_id INTEGER,
+                details TEXT,
+                created_at TIMESTAMP DEFAULT NOW()
+            )
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at
+            ON audit_logs(created_at)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id
+            ON audit_logs(user_id)
+        """)
+
         # Tabela de materiais
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS materials (
@@ -131,13 +170,6 @@ def init_database():
 def execute_query(query: str, params: tuple = ()) -> List[Dict[str, Any]]:
     """
     Executa uma query SELECT e retorna os resultados como lista de dicionários
-
-    Args:
-        query: Query SQL a ser executada
-        params: Parâmetros para a query
-
-    Returns:
-        Lista de dicionários com os resultados
     """
     with get_db_connection() as conn:
         cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
@@ -149,13 +181,6 @@ def execute_query(query: str, params: tuple = ()) -> List[Dict[str, Any]]:
 def execute_insert(query: str, params: tuple = ()) -> int:
     """
     Executa uma query INSERT e retorna o ID do registro inserido
-
-    Args:
-        query: Query SQL a ser executada
-        params: Parâmetros para a query
-
-    Returns:
-        ID do registro inserido
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
@@ -167,13 +192,6 @@ def execute_insert(query: str, params: tuple = ()) -> int:
 def execute_update(query: str, params: tuple = ()) -> int:
     """
     Executa uma query UPDATE ou DELETE e retorna o número de linhas afetadas
-
-    Args:
-        query: Query SQL a ser executada
-        params: Parâmetros para a query
-
-    Returns:
-        Número de linhas afetadas
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()

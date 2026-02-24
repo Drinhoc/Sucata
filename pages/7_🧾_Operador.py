@@ -6,7 +6,7 @@ Interface otimizada para mobile: registra materiais e gera canhotos
 import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime
-from services import get_current_prices, create_canhoto, get_canhoto_with_items
+from services import get_current_prices, create_canhoto, get_canhoto_with_items, log_action
 
 st.set_page_config(page_title="Operador", page_icon="🧾", layout="centered")
 
@@ -201,9 +201,21 @@ elif st.session_state.operator_stage == "reviewing":
 
     with col_confirm:
         if st.button("✅ Confirmar e Gerar", type="primary", use_container_width=True):
+            items_count = len(st.session_state.cart_items)
+            total_val = sum(i['total_value'] for i in st.session_state.cart_items)
             canhoto_id = create_canhoto(
                 st.session_state.cart_items,
                 client_name=client_name
+            )
+            log_action(
+                st.session_state.get('user_id', 0),
+                st.session_state.get('username', '?'),
+                "CREATE", "canhoto", canhoto_id,
+                {
+                    "cliente": client_name.strip() or "Anônimo",
+                    "itens": items_count,
+                    "valor_total": round(total_val, 2),
+                }
             )
             st.session_state.current_canhoto_id = canhoto_id
             st.session_state.cart_items = []

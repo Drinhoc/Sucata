@@ -1,6 +1,6 @@
 """
 Sistema de Controle de Sucata
-Aplicação principal com autenticação e navegação
+Aplicação principal com autenticação por usuário
 """
 
 import streamlit as st
@@ -11,9 +11,7 @@ from db import init_database
 # Carrega variáveis de ambiente
 load_dotenv()
 
-# Configurações da aplicação
 APP_NAME = os.getenv("APP_NAME", "Sistema de Controle de Sucata")
-APP_PASSWORD = os.getenv("APP_PASSWORD", "")
 
 # Configuração da página
 st.set_page_config(
@@ -24,34 +22,38 @@ st.set_page_config(
 )
 
 
-def check_password() -> bool:
+def check_login() -> bool:
     """
-    Verifica a senha de acesso ao sistema
-    Retorna True se autenticado, False caso contrário
+    Exibe o formulário de login e autentica o usuário.
+    Retorna True se autenticado, False caso contrário.
     """
-    # Se não houver senha configurada, bloqueia o acesso
-    if not APP_PASSWORD:
-        st.error("⚠️ Sistema não configurado. Configure APP_PASSWORD no arquivo .env")
-        st.info("👉 Copie o arquivo .env.example para .env e defina uma senha")
-        st.stop()
-        return False
-
-    # Verifica se já está autenticado
-    if "authenticated" in st.session_state and st.session_state.authenticated:
+    if st.session_state.get("authenticated"):
         return True
 
-    # Mostra tela de login
-    st.markdown(f"# 🔐 {APP_NAME}")
-    st.markdown("### Login")
+    st.markdown(f"# ♻️ {APP_NAME}")
+    st.markdown("### 🔐 Login")
+    st.markdown("---")
 
-    password = st.text_input("Digite a senha:", type="password", key="password_input")
+    username = st.text_input("Usuário", placeholder="seu.usuario", key="login_username")
+    password = st.text_input("Senha", type="password", key="login_password")
 
-    if st.button("Entrar", type="primary"):
-        if password == APP_PASSWORD:
+    if st.button("Entrar", type="primary", use_container_width=True):
+        if not username or not password:
+            st.error("❌ Preencha usuário e senha")
+            return False
+
+        from services import authenticate_user
+        user = authenticate_user(username, password)
+
+        if user:
             st.session_state.authenticated = True
+            st.session_state.user_id = user['id']
+            st.session_state.username = user['username']
+            st.session_state.user_name = user['name']
+            st.session_state.role = user['role']
             st.rerun()
         else:
-            st.error("❌ Senha incorreta")
+            st.error("❌ Usuário ou senha incorretos")
 
     return False
 
@@ -59,35 +61,41 @@ def check_password() -> bool:
 def main():
     """Função principal da aplicação"""
 
+    # Inicializa o banco e seed
+    init_database()
+    from services import seed_initial_data
+    seed_initial_data()
+
     # Verifica autenticação
-    if not check_password():
+    if not check_login():
         return
 
-    # Inicializa o banco de dados
-    init_database()
+    # Menu lateral
+    with st.sidebar:
+        st.markdown("## ♻️ Menu")
+        st.markdown("---")
+
+        # Info do usuário logado
+        role_label = "🔑 Admin" if st.session_state.get('role') == 'admin' else "👷 Operador"
+        st.markdown(f"👤 **{st.session_state.get('user_name', '')}**")
+        st.caption(f"{role_label}  ·  @{st.session_state.get('username', '')}")
+
+        st.markdown("---")
+
+        if st.button("🚪 Sair", use_container_width=True):
+            for key in ['authenticated', 'user_id', 'username', 'user_name', 'role']:
+                st.session_state.pop(key, None)
+            st.rerun()
+
+        st.markdown("---")
+        st.caption("Versão 2.0.0")
 
     # Cabeçalho
     st.markdown(f"# ♻️ {APP_NAME}")
     st.markdown("---")
 
-    # Menu lateral
-    with st.sidebar:
-        st.markdown("## 📋 Menu")
-
-        # Botão de logout
-        if st.button("🚪 Sair", use_container_width=True):
-            st.session_state.authenticated = False
-            st.rerun()
-
-        st.markdown("---")
-
-        # Informações do sistema
-        st.markdown("### ℹ️ Sistema")
-        st.caption("Versão 1.0.0")
-        st.caption("Desenvolvido com Streamlit")
-
-    # Mensagem de boas-vindas na página inicial
-    st.markdown("### 👋 Bem-vindo ao Sistema de Controle de Sucata")
+    # Boas-vindas
+    st.markdown(f"### 👋 Olá, {st.session_state.get('user_name', '')}!")
 
     st.info("""
     **📌 Navegue pelas páginas usando o menu lateral:**
@@ -98,9 +106,11 @@ def main():
     - 📦 **Estoque**: Consulte o estoque atual
     - 📝 **Cadastros**: Gerencie materiais e parceiros
     - 📈 **Relatórios**: Análises e exportações
+    - 🧾 **Operador**: Atendimento ao cliente (canhotos)
+    - 💳 **Pagamentos**: Confirmação de canhotos
     """)
 
-    # Métricas rápidas na página inicial
+    # Métricas rápidas
     from datetime import datetime
     from services import get_monthly_metrics, get_stock_value_estimate
 
@@ -129,7 +139,6 @@ def main():
         st.metric(
             "📈 Lucro Bruto",
             f"R$ {metrics['gross_profit']:,.2f}",
-            delta=f"{metrics['gross_profit']:,.2f}",
             delta_color="normal" if metrics['gross_profit'] >= 0 else "inverse"
         )
     with col4:
@@ -139,7 +148,7 @@ def main():
         )
 
     st.markdown("---")
-    st.markdown("💡 **Dica:** Use as páginas do menu para gerenciar seu negócio de forma completa!")
+    st.caption("💡 Use as páginas do menu para gerenciar seu negócio de forma completa!")
 
 
 if __name__ == "__main__":

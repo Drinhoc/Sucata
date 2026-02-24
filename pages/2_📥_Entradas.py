@@ -10,7 +10,8 @@ from services import (
     get_all_materials,
     get_all_partners,
     create_transaction,
-    get_transactions
+    get_transactions,
+    log_action,
 )
 
 st.set_page_config(page_title="Entradas", page_icon="📥", layout="centered")
@@ -111,6 +112,19 @@ with st.form("form_entrada", clear_on_submit=True):
             notes=notes
         )
         if success:
+            log_action(
+                st.session_state.get('user_id', 0),
+                st.session_state.get('username', '?'),
+                "CREATE", "transaction", transaction_id,
+                {
+                    "tipo": "entrada",
+                    "material": material_options[selected_material],
+                    "parceiro": partner_options[selected_partner],
+                    "peso_kg": weight,
+                    "preco_kg": price_per_kg,
+                    "valor_total": round(weight * price_per_kg, 2),
+                }
+            )
             st.success(f"✅ {message}")
             st.balloons()
         else:

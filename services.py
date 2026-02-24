@@ -3,9 +3,140 @@ Módulo de serviços e lógica de negócio
 Contém todas as operações relacionadas a materiais, parceiros e transações
 """
 
+import json
+import bcrypt as _bcrypt
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from db import execute_query, execute_insert, execute_update
+
+
+# ============================================
+# AUTENTICAÇÃO E USUÁRIOS
+# ============================================
+
+def seed_initial_data():
+    """Cria o usuário admin padrão se não houver nenhum usuário cadastrado"""
+    existing = execute_query("SELECT id FROM users LIMIT 1")
+    if not existing:
+        password_hash = _bcrypt.hashpw(b"admin", _bcrypt.gensalt()).decode()
+        execute_insert(
+            "INSERT INTO users (username, name, password_hash, role) VALUES (%s, %s, %s, %s)",
+            ("admin", "Administrador", password_hash, "admin")
+        )
+
+
+def authenticate_user(username: str, password: str) -> Optional[Dict[str, Any]]:
+    """Autentica um usuário pelo username e senha. Retorna o dict do usuário ou None."""
+    rows = execute_query(
+        "SELECT * FROM users WHERE username = %s AND active = 1",
+        (username.strip().lower(),)
+    )
+    if not rows:
+        return None
+    user = rows[0]
+    if _bcrypt.checkpw(password.encode(), user['password_hash'].encode()):
+        execute_update("UPDATE users SET last_login = NOW() WHERE id = %s", (user['id'],))
+        return user
+    return None
+
+
+def get_all_users() -> List[Dict[str, Any]]:
+    """Retorna todos os usuários cadastrados (sem o hash de senha)"""
+    return execute_query(
+        "SELECT id, username, name, role, active, created_at, last_login "
+        "FROM users ORDER BY name"
+    )
+
+
+def create_user(username: str, name: str, password: str, role: str) -> Tuple[bool, str]:
+    """Cria um novo usuário"""
+    try:
+        password_hash = _bcrypt.hashpw(password.encode(), _bcrypt.gensalt()).decode()
+        execute_insert(
+            "INSERT INTO users (username, name, password_hash, role) VALUES (%s, %s, %s, %s)",
+            (username.strip().lower(), name.strip(), password_hash, role)
+        )
+        return True, "Usuário criado com sucesso!"
+    except Exception as e:
+        return False, f"Erro ao criar usuário: {str(e)}"
+
+
+def update_user(user_id: int, name: str, role: str, active: int) -> bool:
+    """Atualiza nome, perfil e status de um usuário"""
+    rows = execute_update(
+        "UPDATE users SET name = %s, role = %s, active = %s WHERE id = %s",
+        (name.strip(), role, active, user_id)
+    )
+    return rows > 0
+
+
+def reset_user_password(user_id: int, new_password: str) -> bool:
+    """Redefine a senha de um usuário"""
+    password_hash = _bcrypt.hashpw(new_password.encode(), _bcrypt.gensalt()).decode()
+    rows = execute_update(
+        "UPDATE users SET password_hash = %s WHERE id = %s",
+        (password_hash, user_id)
+    )
+    return rows > 0
+
+
+# ============================================
+# AUDIT LOG
+# ============================================
+
+def log_action(
+    user_id: int,
+    username: str,
+    action: str,
+    entity: str,
+    entity_id: Optional[int] = None,
+    details: Optional[dict] = None
+) -> None:
+    """
+    Registra uma ação no log de auditoria.
+    Nunca lança exceções — falhas de log não devem interromper operações.
+    """
+    try:
+        execute_insert(
+            """INSERT INTO audit_logs (user_id, username, action, entity, entity_id, details)
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            (user_id, username, action, entity, entity_id,
+             json.dumps(details or {}, ensure_ascii=False))
+        )
+    except Exception:
+        pass
+
+
+def get_audit_logs(
+    start_date: Optional[date] = None,
+    user_id_filter: Optional[int] = None,
+    action_filter: Optional[str] = None,
+    entity_filter: Optional[str] = None,
+    limit: int = 500
+) -> List[Dict[str, Any]]:
+    """Retorna logs de auditoria com filtros opcionais"""
+    query = "SELECT * FROM audit_logs WHERE 1=1"
+    params = []
+
+    if start_date:
+        query += " AND created_at >= %s"
+        params.append(start_date)
+
+    if user_id_filter:
+        query += " AND user_id = %s"
+        params.append(user_id_filter)
+
+    if action_filter:
+        query += " AND action = %s"
+        params.append(action_filter)
+
+    if entity_filter:
+        query += " AND entity = %s"
+        params.append(entity_filter)
+
+    query += f" ORDER BY created_at DESC LIMIT {limit}"
+
+    return execute_query(query, tuple(params))
 
 
 # ============================================
@@ -67,13 +198,7 @@ def activate_material(material_id: int) -> bool:
 # ============================================
 
 def get_all_partners(active_only: bool = True, partner_type: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Retorna todos os parceiros cadastrados
-
-    Args:
-        active_only: Se True, retorna apenas parceiros ativos
-        partner_type: Filtra por tipo ('fornecedor', 'cliente', 'ambos')
-    """
+    """Retorna todos os parceiros cadastrados"""
     query = "SELECT * FROM partners WHERE 1=1"
     params = []
 
@@ -135,10 +260,7 @@ def activate_partner(partner_id: int) -> bool:
 # ============================================
 
 def get_current_stock(material_id: int) -> float:
-    """
-    Calcula o estoque atual de um material
-    (soma de entradas - soma de saídas)
-    """
+    """Calcula o estoque atual de um material (entradas - saídas)"""
     query = """
         SELECT
             COALESCE(SUM(CASE WHEN type = 'entrada' THEN weight_kg ELSE 0 END), 0) -
@@ -151,10 +273,7 @@ def get_current_stock(material_id: int) -> float:
 
 
 def get_all_stock() -> List[Dict[str, Any]]:
-    """
-    Retorna o estoque atual de todos os materiais ativos
-    com informações adicionais
-    """
+    """Retorna o estoque atual de todos os materiais ativos com informações adicionais"""
     query = """
         SELECT
             m.id,
@@ -184,13 +303,7 @@ def create_transaction(
     price_per_kg: float,
     notes: str = ""
 ) -> Tuple[bool, str, Optional[int]]:
-    """
-    Cria uma nova transação (entrada ou saída)
-
-    Returns:
-        Tuple[bool, str, Optional[int]]: (sucesso, mensagem, transaction_id)
-    """
-    # Validações
+    """Cria uma nova transação (entrada ou saída)"""
     if transaction_type not in ['entrada', 'saida']:
         return False, "Tipo de transação inválido", None
 
@@ -200,16 +313,13 @@ def create_transaction(
     if price_per_kg < 0:
         return False, "O preço não pode ser negativo", None
 
-    # Valida estoque para saídas
     if transaction_type == 'saida':
         current_stock = get_current_stock(material_id)
         if weight_kg > current_stock:
             return False, f"Estoque insuficiente. Disponível: {current_stock:.2f} kg", None
 
-    # Calcula valor total
     total_value = weight_kg * price_per_kg
 
-    # Insere a transação
     query = """
         INSERT INTO transactions
         (date, type, material_id, partner_id, weight_kg, price_per_kg, total_value, notes)
@@ -232,9 +342,7 @@ def get_transactions(
     partner_id: Optional[int] = None,
     limit: Optional[int] = None
 ) -> List[Dict[str, Any]]:
-    """
-    Retorna transações com filtros opcionais
-    """
+    """Retorna transações com filtros opcionais"""
     query = """
         SELECT
             t.*,
@@ -289,9 +397,7 @@ def delete_transaction(transaction_id: int) -> bool:
 # ============================================
 
 def get_monthly_metrics(year: int, month: int) -> Dict[str, float]:
-    """
-    Retorna métricas do mês (compras, vendas, lucro bruto)
-    """
+    """Retorna métricas do mês (compras, vendas, lucro bruto)"""
     start_date = date(year, month, 1)
     if month == 12:
         end_date = date(year + 1, 1, 1)
@@ -329,10 +435,7 @@ def get_monthly_metrics(year: int, month: int) -> Dict[str, float]:
 
 
 def get_stock_value_estimate() -> float:
-    """
-    Calcula uma estimativa do valor total em estoque
-    baseado no preço médio de compra
-    """
+    """Calcula uma estimativa do valor total em estoque baseado no preço médio de compra"""
     query = """
         SELECT
             SUM(stock * avg_price) as total_value
@@ -415,17 +518,7 @@ def create_canhoto(
     client_name: str = "",
     partner_id: Optional[int] = None
 ) -> int:
-    """
-    Cria um novo canhoto pendente com os itens fornecidos.
-
-    Args:
-        items: Lista de dicts com material_id, weight_kg, price_per_kg, total_value
-        client_name: Nome opcional do cliente
-        partner_id: ID do parceiro cadastrado (opcional)
-
-    Returns:
-        ID do canhoto criado
-    """
+    """Cria um novo canhoto pendente com os itens fornecidos"""
     number = _get_next_canhoto_number()
     total_value = sum(item['total_value'] for item in items)
     today = date.today()
@@ -452,12 +545,7 @@ def create_canhoto(
 
 
 def get_canhotos(status: Optional[str] = None) -> List[Dict[str, Any]]:
-    """
-    Retorna canhotos com filtro opcional de status.
-
-    Args:
-        status: 'pendente', 'confirmado' ou 'cancelado'. None retorna todos.
-    """
+    """Retorna canhotos com filtro opcional de status"""
     query = """
         SELECT
             c.id,
@@ -509,19 +597,13 @@ def get_canhoto_with_items(canhoto_id: int) -> Optional[Dict[str, Any]]:
 
 
 def confirm_canhoto(canhoto_id: int) -> Tuple[bool, str]:
-    """
-    Confirma o pagamento de um canhoto e registra as transações de entrada.
-
-    Returns:
-        Tuple[bool, str]: (sucesso, mensagem)
-    """
+    """Confirma o pagamento de um canhoto e registra as transações de entrada"""
     canhoto = get_canhoto_with_items(canhoto_id)
     if not canhoto:
         return False, "Canhoto não encontrado"
     if canhoto['status'] != 'pendente':
         return False, f"Canhoto já está {canhoto['status']}"
 
-    # Resolve parceiro: usa cadastrado ou cria/busca "Cliente Avulso"
     partner_id = canhoto['partner_id']
     if not partner_id:
         existing = execute_query(
@@ -569,9 +651,7 @@ def get_material_summary(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
 ) -> List[Dict[str, Any]]:
-    """
-    Retorna resumo por material com entradas, saídas e lucro
-    """
+    """Retorna resumo por material com entradas, saídas e lucro"""
     query = """
         SELECT
             m.name as material,
@@ -607,13 +687,8 @@ def get_material_summary(
     return execute_query(query, tuple(params))
 
 
-def get_period_comparison(
-    start_date: date,
-    end_date: date
-) -> Dict[str, Any]:
-    """
-    Retorna métricas do período atual e do período anterior (mesma duração) para comparação.
-    """
+def get_period_comparison(start_date: date, end_date: date) -> Dict[str, Any]:
+    """Retorna métricas do período atual e do período anterior para comparação"""
     delta = end_date - start_date
     prev_end = start_date - timedelta(days=1)
     prev_start = prev_end - delta
@@ -658,9 +733,7 @@ def get_temporal_evolution(
     end_date: date,
     granularity: str = 'month'
 ) -> List[Dict[str, Any]]:
-    """
-    Retorna evolução temporal das transações agrupada por dia, semana ou mês.
-    """
+    """Retorna evolução temporal das transações agrupada por dia, semana ou mês"""
     fmt_map = {
         'day': 'YYYY-MM-DD',
         'week': 'IYYY-"W"IW',
@@ -691,9 +764,7 @@ def get_material_analysis(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
 ) -> List[Dict[str, Any]]:
-    """
-    Retorna análise detalhada por material com preços médios e margens.
-    """
+    """Retorna análise detalhada por material com preços médios e margens"""
     date_cond = ""
     params: list = []
     if start_date:
@@ -740,9 +811,7 @@ def get_partner_analysis(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None
 ) -> List[Dict[str, Any]]:
-    """
-    Retorna análise por parceiro com totais de compras, vendas e volume no período.
-    """
+    """Retorna análise por parceiro com totais de compras, vendas e volume no período"""
     date_cond = ""
     params: list = []
     if start_date:

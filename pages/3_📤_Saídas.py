@@ -11,7 +11,8 @@ from services import (
     get_all_partners,
     create_transaction,
     get_transactions,
-    get_current_stock
+    get_current_stock,
+    log_action,
 )
 
 st.set_page_config(page_title="Saídas", page_icon="📤", layout="centered")
@@ -122,6 +123,19 @@ with st.form("form_saida", clear_on_submit=True):
                 notes=notes
             )
             if success:
+                log_action(
+                    st.session_state.get('user_id', 0),
+                    st.session_state.get('username', '?'),
+                    "CREATE", "transaction", transaction_id,
+                    {
+                        "tipo": "saida",
+                        "material": material_options[selected_material],
+                        "cliente": partner_options[selected_partner],
+                        "peso_kg": weight,
+                        "preco_kg": price_per_kg,
+                        "valor_total": round(weight * price_per_kg, 2),
+                    }
+                )
                 st.success(f"✅ {message}")
                 st.balloons()
             else:
