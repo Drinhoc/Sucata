@@ -23,7 +23,7 @@ def get_all_materials(active_only: bool = True) -> List[Dict[str, Any]]:
 
 def get_material_by_id(material_id: int) -> Optional[Dict[str, Any]]:
     """Retorna um material específico pelo ID"""
-    query = "SELECT * FROM materials WHERE id = ?"
+    query = "SELECT * FROM materials WHERE id = %s"
     results = execute_query(query, (material_id,))
     return results[0] if results else None
 
@@ -32,7 +32,7 @@ def create_material(name: str, unit: str = "kg") -> int:
     """Cria um novo material"""
     query = """
         INSERT INTO materials (name, unit, active)
-        VALUES (?, ?, 1)
+        VALUES (%s, %s, 1)
     """
     return execute_insert(query, (name.strip(), unit.strip()))
 
@@ -41,8 +41,8 @@ def update_material(material_id: int, name: str, unit: str) -> bool:
     """Atualiza um material existente"""
     query = """
         UPDATE materials
-        SET name = ?, unit = ?
-        WHERE id = ?
+        SET name = %s, unit = %s
+        WHERE id = %s
     """
     rows_affected = execute_update(query, (name.strip(), unit.strip(), material_id))
     return rows_affected > 0
@@ -50,14 +50,14 @@ def update_material(material_id: int, name: str, unit: str) -> bool:
 
 def deactivate_material(material_id: int) -> bool:
     """Desativa um material (soft delete)"""
-    query = "UPDATE materials SET active = 0 WHERE id = ?"
+    query = "UPDATE materials SET active = 0 WHERE id = %s"
     rows_affected = execute_update(query, (material_id,))
     return rows_affected > 0
 
 
 def activate_material(material_id: int) -> bool:
     """Reativa um material"""
-    query = "UPDATE materials SET active = 1 WHERE id = ?"
+    query = "UPDATE materials SET active = 1 WHERE id = %s"
     rows_affected = execute_update(query, (material_id,))
     return rows_affected > 0
 
@@ -81,7 +81,7 @@ def get_all_partners(active_only: bool = True, partner_type: Optional[str] = Non
         query += " AND active = 1"
 
     if partner_type:
-        query += " AND (type = ? OR type = 'ambos')"
+        query += " AND (type = %s OR type = 'ambos')"
         params.append(partner_type)
 
     query += " ORDER BY name"
@@ -91,7 +91,7 @@ def get_all_partners(active_only: bool = True, partner_type: Optional[str] = Non
 
 def get_partner_by_id(partner_id: int) -> Optional[Dict[str, Any]]:
     """Retorna um parceiro específico pelo ID"""
-    query = "SELECT * FROM partners WHERE id = ?"
+    query = "SELECT * FROM partners WHERE id = %s"
     results = execute_query(query, (partner_id,))
     return results[0] if results else None
 
@@ -100,7 +100,7 @@ def create_partner(name: str, partner_type: str, phone: str = "") -> int:
     """Cria um novo parceiro"""
     query = """
         INSERT INTO partners (name, type, phone, active)
-        VALUES (?, ?, ?, 1)
+        VALUES (%s, %s, %s, 1)
     """
     return execute_insert(query, (name.strip(), partner_type, phone.strip()))
 
@@ -109,8 +109,8 @@ def update_partner(partner_id: int, name: str, partner_type: str, phone: str) ->
     """Atualiza um parceiro existente"""
     query = """
         UPDATE partners
-        SET name = ?, type = ?, phone = ?
-        WHERE id = ?
+        SET name = %s, type = %s, phone = %s
+        WHERE id = %s
     """
     rows_affected = execute_update(query, (name.strip(), partner_type, phone.strip(), partner_id))
     return rows_affected > 0
@@ -118,14 +118,14 @@ def update_partner(partner_id: int, name: str, partner_type: str, phone: str) ->
 
 def deactivate_partner(partner_id: int) -> bool:
     """Desativa um parceiro (soft delete)"""
-    query = "UPDATE partners SET active = 0 WHERE id = ?"
+    query = "UPDATE partners SET active = 0 WHERE id = %s"
     rows_affected = execute_update(query, (partner_id,))
     return rows_affected > 0
 
 
 def activate_partner(partner_id: int) -> bool:
     """Reativa um parceiro"""
-    query = "UPDATE partners SET active = 1 WHERE id = ?"
+    query = "UPDATE partners SET active = 1 WHERE id = %s"
     rows_affected = execute_update(query, (partner_id,))
     return rows_affected > 0
 
@@ -144,7 +144,7 @@ def get_current_stock(material_id: int) -> float:
             COALESCE(SUM(CASE WHEN type = 'entrada' THEN weight_kg ELSE 0 END), 0) -
             COALESCE(SUM(CASE WHEN type = 'saida' THEN weight_kg ELSE 0 END), 0) as stock
         FROM transactions
-        WHERE material_id = ?
+        WHERE material_id = %s
     """
     result = execute_query(query, (material_id,))
     return result[0]['stock'] if result else 0.0
@@ -213,7 +213,7 @@ def create_transaction(
     query = """
         INSERT INTO transactions
         (date, type, material_id, partner_id, weight_kg, price_per_kg, total_value, notes)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """
     transaction_id = execute_insert(
         query,
@@ -250,23 +250,23 @@ def get_transactions(
     params = []
 
     if start_date:
-        query += " AND t.date >= ?"
+        query += " AND t.date >= %s"
         params.append(start_date)
 
     if end_date:
-        query += " AND t.date <= ?"
+        query += " AND t.date <= %s"
         params.append(end_date)
 
     if transaction_type:
-        query += " AND t.type = ?"
+        query += " AND t.type = %s"
         params.append(transaction_type)
 
     if material_id:
-        query += " AND t.material_id = ?"
+        query += " AND t.material_id = %s"
         params.append(material_id)
 
     if partner_id:
-        query += " AND t.partner_id = ?"
+        query += " AND t.partner_id = %s"
         params.append(partner_id)
 
     query += " ORDER BY t.date DESC, t.created_at DESC"
@@ -279,7 +279,7 @@ def get_transactions(
 
 def delete_transaction(transaction_id: int) -> bool:
     """Deleta uma transação"""
-    query = "DELETE FROM transactions WHERE id = ?"
+    query = "DELETE FROM transactions WHERE id = %s"
     rows_affected = execute_update(query, (transaction_id,))
     return rows_affected > 0
 
@@ -305,7 +305,7 @@ def get_monthly_metrics(year: int, month: int) -> Dict[str, float]:
             COALESCE(SUM(CASE WHEN type = 'entrada' THEN weight_kg END), 0) as weight_in,
             COALESCE(SUM(CASE WHEN type = 'saida' THEN weight_kg END), 0) as weight_out
         FROM transactions
-        WHERE date >= ? AND date < ?
+        WHERE date >= %s AND date < %s
     """
     result = execute_query(query, (start_date, end_date))
 
@@ -346,7 +346,7 @@ def get_stock_value_estimate() -> float:
             LEFT JOIN transactions t ON m.id = t.material_id
             WHERE m.active = 1
             GROUP BY m.id
-        )
+        ) AS stock_calc
     """
     result = execute_query(query)
     return result[0]['total_value'] if result and result[0]['total_value'] else 0.0
@@ -376,7 +376,7 @@ def get_current_prices() -> List[Dict[str, Any]]:
 def get_price_for_material(material_id: int) -> float:
     """Retorna o preço vigente por kg de um material"""
     result = execute_query(
-        "SELECT price_per_kg FROM prices WHERE material_id = ?", (material_id,)
+        "SELECT price_per_kg FROM prices WHERE material_id = %s", (material_id,)
     )
     return result[0]['price_per_kg'] if result else 0.0
 
@@ -384,16 +384,16 @@ def get_price_for_material(material_id: int) -> float:
 def update_price(material_id: int, price_per_kg: float) -> bool:
     """Cria ou atualiza o preço vigente de um material"""
     existing = execute_query(
-        "SELECT id FROM prices WHERE material_id = ?", (material_id,)
+        "SELECT id FROM prices WHERE material_id = %s", (material_id,)
     )
     if existing:
         execute_update(
-            "UPDATE prices SET price_per_kg = ?, updated_at = CURRENT_TIMESTAMP WHERE material_id = ?",
+            "UPDATE prices SET price_per_kg = %s, updated_at = NOW() WHERE material_id = %s",
             (price_per_kg, material_id)
         )
     else:
         execute_insert(
-            "INSERT INTO prices (material_id, price_per_kg) VALUES (?, ?)",
+            "INSERT INTO prices (material_id, price_per_kg) VALUES (%s, %s)",
             (material_id, price_per_kg)
         )
     return True
@@ -433,7 +433,7 @@ def create_canhoto(
     canhoto_id = execute_insert(
         """
         INSERT INTO canhotos (number, date, client_name, partner_id, status, total_value)
-        VALUES (?, ?, ?, ?, 'pendente', ?)
+        VALUES (%s, %s, %s, %s, 'pendente', %s)
         """,
         (number, today, client_name.strip() or None, partner_id, total_value)
     )
@@ -442,7 +442,7 @@ def create_canhoto(
         execute_insert(
             """
             INSERT INTO canhoto_items (canhoto_id, material_id, weight_kg, price_per_kg, total_value)
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (%s, %s, %s, %s, %s)
             """,
             (canhoto_id, item['material_id'], item['weight_kg'],
              item['price_per_kg'], item['total_value'])
@@ -460,7 +460,14 @@ def get_canhotos(status: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     query = """
         SELECT
-            c.*,
+            c.id,
+            c.number,
+            c.date,
+            c.client_name,
+            c.partner_id,
+            c.status,
+            c.total_value,
+            c.created_at,
             COUNT(ci.id) as items_count
         FROM canhotos c
         LEFT JOIN canhoto_items ci ON c.id = ci.canhoto_id
@@ -468,16 +475,20 @@ def get_canhotos(status: Optional[str] = None) -> List[Dict[str, Any]]:
     """
     params = []
     if status:
-        query += " AND c.status = ?"
+        query += " AND c.status = %s"
         params.append(status)
 
-    query += " GROUP BY c.id ORDER BY c.created_at DESC"
+    query += """
+        GROUP BY c.id, c.number, c.date, c.client_name, c.partner_id,
+                 c.status, c.total_value, c.created_at
+        ORDER BY c.created_at DESC
+    """
     return execute_query(query, tuple(params))
 
 
 def get_canhoto_with_items(canhoto_id: int) -> Optional[Dict[str, Any]]:
     """Retorna um canhoto com todos os seus itens"""
-    canhoto = execute_query("SELECT * FROM canhotos WHERE id = ?", (canhoto_id,))
+    canhoto = execute_query("SELECT * FROM canhotos WHERE id = %s", (canhoto_id,))
     if not canhoto:
         return None
 
@@ -486,7 +497,7 @@ def get_canhoto_with_items(canhoto_id: int) -> Optional[Dict[str, Any]]:
         SELECT ci.*, m.name as material_name, m.unit as material_unit
         FROM canhoto_items ci
         JOIN materials m ON ci.material_id = m.id
-        WHERE ci.canhoto_id = ?
+        WHERE ci.canhoto_id = %s
         ORDER BY ci.id
         """,
         (canhoto_id,)
@@ -534,14 +545,14 @@ def confirm_canhoto(canhoto_id: int) -> Tuple[bool, str]:
             """
             INSERT INTO transactions
                 (date, type, material_id, partner_id, weight_kg, price_per_kg, total_value, notes)
-            VALUES (?, 'entrada', ?, ?, ?, ?, ?, ?)
+            VALUES (%s, 'entrada', %s, %s, %s, %s, %s, %s)
             """,
             (today, item['material_id'], partner_id,
              item['weight_kg'], item['price_per_kg'], item['total_value'], notes_base)
         )
 
     execute_update(
-        "UPDATE canhotos SET status = 'confirmado' WHERE id = ?", (canhoto_id,)
+        "UPDATE canhotos SET status = 'confirmado' WHERE id = %s", (canhoto_id,)
     )
     return True, "Pagamento confirmado e transações registradas!"
 
@@ -549,7 +560,7 @@ def confirm_canhoto(canhoto_id: int) -> Tuple[bool, str]:
 def cancel_canhoto(canhoto_id: int) -> bool:
     """Cancela um canhoto pendente"""
     rows = execute_update(
-        "UPDATE canhotos SET status = 'cancelado' WHERE id = ?", (canhoto_id,)
+        "UPDATE canhotos SET status = 'cancelado' WHERE id = %s", (canhoto_id,)
     )
     return rows > 0
 
@@ -577,14 +588,21 @@ def get_material_summary(
     params = []
 
     if start_date:
-        query += " AND t.date >= ?"
+        query += " AND t.date >= %s"
         params.append(start_date)
 
     if end_date:
-        query += " AND t.date <= ?"
+        query += " AND t.date <= %s"
         params.append(end_date)
 
-    query += " GROUP BY m.id, m.name HAVING (weight_in > 0 OR weight_out > 0) ORDER BY profit DESC"
+    query += """
+        GROUP BY m.id, m.name
+        HAVING (
+            COALESCE(SUM(CASE WHEN t.type = 'entrada' THEN t.weight_kg END), 0) > 0
+            OR COALESCE(SUM(CASE WHEN t.type = 'saida' THEN t.weight_kg END), 0) > 0
+        )
+        ORDER BY profit DESC
+    """
 
     return execute_query(query, tuple(params))
 
@@ -608,7 +626,7 @@ def get_period_comparison(
             COALESCE(SUM(CASE WHEN type = 'saida' THEN weight_kg END), 0) as peso_out,
             COUNT(*) as transacoes
         FROM transactions
-        WHERE date >= ? AND date <= ?
+        WHERE date >= %s AND date <= %s
     """
 
     def parse(rows):
@@ -643,19 +661,23 @@ def get_temporal_evolution(
     """
     Retorna evolução temporal das transações agrupada por dia, semana ou mês.
     """
-    fmt_map = {'day': '%Y-%m-%d', 'week': '%Y-W%W', 'month': '%Y-%m'}
-    fmt = fmt_map.get(granularity, '%Y-%m')
+    fmt_map = {
+        'day': 'YYYY-MM-DD',
+        'week': 'IYYY-"W"IW',
+        'month': 'YYYY-MM'
+    }
+    fmt = fmt_map.get(granularity, 'YYYY-MM')
 
     query = f"""
         SELECT
-            strftime('{fmt}', date) as periodo,
+            TO_CHAR(date, '{fmt}') as periodo,
             COALESCE(SUM(CASE WHEN type = 'entrada' THEN total_value END), 0) as compras,
             COALESCE(SUM(CASE WHEN type = 'saida' THEN total_value END), 0) as vendas,
             COALESCE(SUM(CASE WHEN type = 'entrada' THEN weight_kg END), 0) as peso_comprado,
             COALESCE(SUM(CASE WHEN type = 'saida' THEN weight_kg END), 0) as peso_vendido,
             COUNT(*) as transacoes
         FROM transactions
-        WHERE date >= ? AND date <= ?
+        WHERE date >= %s AND date <= %s
         GROUP BY periodo
         ORDER BY periodo
     """
@@ -675,10 +697,10 @@ def get_material_analysis(
     date_cond = ""
     params: list = []
     if start_date:
-        date_cond += " AND t.date >= ?"
+        date_cond += " AND t.date >= %s"
         params.append(start_date)
     if end_date:
-        date_cond += " AND t.date <= ?"
+        date_cond += " AND t.date <= %s"
         params.append(end_date)
 
     query = f"""
@@ -696,7 +718,10 @@ def get_material_analysis(
         LEFT JOIN transactions t ON m.id = t.material_id{date_cond}
         WHERE m.active = 1
         GROUP BY m.id, m.name
-        HAVING (peso_comprado > 0 OR peso_vendido > 0)
+        HAVING (
+            COALESCE(SUM(CASE WHEN t.type = 'entrada' THEN t.weight_kg END), 0) > 0
+            OR COALESCE(SUM(CASE WHEN t.type = 'saida' THEN t.weight_kg END), 0) > 0
+        )
         ORDER BY valor_compras DESC
     """
     results = execute_query(query, tuple(params))
@@ -721,10 +746,10 @@ def get_partner_analysis(
     date_cond = ""
     params: list = []
     if start_date:
-        date_cond += " AND t.date >= ?"
+        date_cond += " AND t.date >= %s"
         params.append(start_date)
     if end_date:
-        date_cond += " AND t.date <= ?"
+        date_cond += " AND t.date <= %s"
         params.append(end_date)
 
     query = f"""
@@ -744,7 +769,10 @@ def get_partner_analysis(
         LEFT JOIN transactions t ON p.id = t.partner_id{date_cond}
         WHERE p.active = 1
         GROUP BY p.id, p.name, p.type, p.phone
-        HAVING (peso_fornecido > 0 OR peso_vendido > 0)
+        HAVING (
+            COALESCE(SUM(CASE WHEN t.type = 'entrada' THEN t.weight_kg END), 0) > 0
+            OR COALESCE(SUM(CASE WHEN t.type = 'saida' THEN t.weight_kg END), 0) > 0
+        )
         ORDER BY valor_pago DESC
     """
     return execute_query(query, tuple(params))

@@ -1,22 +1,21 @@
 """
-Módulo de gerenciamento do banco de dados SQLite
+Módulo de gerenciamento do banco de dados PostgreSQL
 Responsável pela criação e gestão das tabelas do sistema
 """
 
-import sqlite3
+import psycopg2
+import psycopg2.extras
 from contextlib import contextmanager
 from typing import List, Dict, Any
 import os
 
-_DATA_DIR = os.getenv("DATA_DIR", ".")
-DB_PATH = os.path.join(_DATA_DIR, "data.db")
+DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
 @contextmanager
 def get_db_connection():
     """Context manager para conexões com o banco de dados"""
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
+    conn = psycopg2.connect(DATABASE_URL)
     try:
         yield conn
     finally:
@@ -31,30 +30,30 @@ def init_database():
         # Tabela de materiais
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS materials (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL UNIQUE,
                 unit TEXT NOT NULL DEFAULT 'kg',
-                active INTEGER NOT NULL DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                active SMALLINT NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """)
 
         # Tabela de parceiros (fornecedores e clientes)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS partners (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 name TEXT NOT NULL,
                 type TEXT NOT NULL CHECK(type IN ('fornecedor', 'cliente', 'ambos')),
                 phone TEXT,
-                active INTEGER NOT NULL DEFAULT 1,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                active SMALLINT NOT NULL DEFAULT 1,
+                created_at TIMESTAMP DEFAULT NOW()
             )
         """)
 
         # Tabela de transações (entradas e saídas)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS transactions (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 date DATE NOT NULL,
                 type TEXT NOT NULL CHECK(type IN ('entrada', 'saida')),
                 material_id INTEGER NOT NULL,
@@ -63,7 +62,7 @@ def init_database():
                 price_per_kg REAL NOT NULL CHECK(price_per_kg >= 0),
                 total_value REAL NOT NULL,
                 notes TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY (material_id) REFERENCES materials(id),
                 FOREIGN KEY (partner_id) REFERENCES partners(id)
             )
@@ -72,10 +71,10 @@ def init_database():
         # Tabela de preços vigentes por material
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS prices (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 material_id INTEGER NOT NULL UNIQUE,
                 price_per_kg REAL NOT NULL DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY (material_id) REFERENCES materials(id)
             )
         """)
@@ -83,7 +82,7 @@ def init_database():
         # Tabela de canhotos (recibos de atendimento)
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS canhotos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 number TEXT NOT NULL UNIQUE,
                 date DATE NOT NULL,
                 client_name TEXT,
@@ -91,7 +90,7 @@ def init_database():
                 status TEXT NOT NULL DEFAULT 'pendente'
                     CHECK(status IN ('pendente', 'confirmado', 'cancelado')),
                 total_value REAL NOT NULL DEFAULT 0,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                created_at TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY (partner_id) REFERENCES partners(id)
             )
         """)
@@ -99,7 +98,7 @@ def init_database():
         # Tabela de itens de cada canhoto
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS canhoto_items (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id SERIAL PRIMARY KEY,
                 canhoto_id INTEGER NOT NULL,
                 material_id INTEGER NOT NULL,
                 weight_kg REAL NOT NULL,
@@ -141,7 +140,7 @@ def execute_query(query: str, params: tuple = ()) -> List[Dict[str, Any]]:
         Lista de dicionários com os resultados
     """
     with get_db_connection() as conn:
-        cursor = conn.cursor()
+        cursor = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
         cursor.execute(query, params)
         rows = cursor.fetchall()
         return [dict(row) for row in rows]
@@ -160,9 +159,9 @@ def execute_insert(query: str, params: tuple = ()) -> int:
     """
     with get_db_connection() as conn:
         cursor = conn.cursor()
-        cursor.execute(query, params)
+        cursor.execute(query.rstrip() + " RETURNING id", params)
         conn.commit()
-        return cursor.lastrowid
+        return cursor.fetchone()[0]
 
 
 def execute_update(query: str, params: tuple = ()) -> int:
