@@ -1,6 +1,6 @@
 # Sistema de Controle de Sucata
 
-Sistema web profissional e completo para gerenciamento de sucatas, desenvolvido com **Streamlit** e **SQLite**.
+Sistema web profissional e completo para gerenciamento de sucatas, desenvolvido com **Streamlit** e **PostgreSQL**.
 
 ## Funcionalidades
 
@@ -10,6 +10,7 @@ Sistema web profissional e completo para gerenciamento de sucatas, desenvolvido 
 - **Estoque**: Consulta de estoque atual e valores estimados
 - **Cadastros**: Gerenciamento de materiais e parceiros (fornecedores/clientes)
 - **Relatórios**: Análises detalhadas com filtros e exportação CSV
+- **Operador (Canhotos)**: Geração de recibos e confirmação de pagamentos
 - **Login Simples**: Proteção por senha configurável
 
 ## Estrutura do Projeto
@@ -17,20 +18,21 @@ Sistema web profissional e completo para gerenciamento de sucatas, desenvolvido 
 ```
 Sucata/
 ├── app.py                      # Aplicação principal com autenticação
-├── db.py                       # Gerenciamento do banco SQLite
+├── db.py                       # Gerenciamento do banco PostgreSQL
 ├── services.py                 # Lógica de negócio
 ├── requirements.txt            # Dependências Python
+├── railway.toml                # Configuração de deploy no Railway
 ├── .env.example               # Exemplo de configuração
-├── .env                       # Configuração (criar a partir do .env.example)
-├── data.db                    # Banco de dados SQLite (criado automaticamente)
-├── pages/
-│   ├── 1_📊_Dashboard.py
-│   ├── 2_📥_Entradas.py
-│   ├── 3_📤_Saídas.py
-│   ├── 4_📦_Estoque.py
-│   ├── 5_📝_Cadastros.py
-│   └── 6_📈_Relatórios.py
-└── README.md
+├── .env                       # Configuração local (criar a partir do .env.example)
+└── pages/
+    ├── 1_📊_Dashboard.py
+    ├── 2_📥_Entradas.py
+    ├── 3_📤_Saídas.py
+    ├── 4_📦_Estoque.py
+    ├── 5_📝_Cadastros.py
+    ├── 6_📈_Relatórios.py
+    ├── 7_🧾_Operador.py
+    └── 8_💳_Pagamentos.py
 ```
 
 ## Instalação e Execução Local
@@ -38,11 +40,11 @@ Sucata/
 ### Pré-requisitos
 
 - Python 3.8 ou superior
-- pip (gerenciador de pacotes Python)
+- PostgreSQL rodando localmente (ou acesso a uma instância remota)
 
 ### Passo a Passo
 
-1. **Clone o repositório** (ou baixe os arquivos):
+1. **Clone o repositório**:
 
 ```bash
 git clone <url-do-repositorio>
@@ -52,13 +54,13 @@ cd Sucata
 2. **Crie um ambiente virtual** (recomendado):
 
 ```bash
-# No Windows
-python -m venv venv
-venv\Scripts\activate
-
-# No Linux/Mac
+# Linux/Mac
 python3 -m venv venv
 source venv/bin/activate
+
+# Windows
+python -m venv venv
+venv\Scripts\activate
 ```
 
 3. **Instale as dependências**:
@@ -70,18 +72,15 @@ pip install -r requirements.txt
 4. **Configure o arquivo .env**:
 
 ```bash
-# Copie o arquivo de exemplo
 cp .env.example .env
-
-# Edite o arquivo .env e defina sua senha
-# No Windows, use: copy .env.example .env
 ```
 
-Edite o arquivo `.env` e configure:
+Edite o `.env` com suas configurações:
 
 ```env
 APP_NAME=Sistema de Controle de Sucata
 APP_PASSWORD=suasenhaforteaqui
+DATABASE_URL=postgresql://usuario:senha@localhost:5432/sucata
 ```
 
 5. **Execute a aplicação**:
@@ -90,159 +89,100 @@ APP_PASSWORD=suasenhaforteaqui
 streamlit run app.py
 ```
 
-6. **Acesse no navegador**:
-
-A aplicação abrirá automaticamente em `http://localhost:8501`
-
-## Uso do Sistema
-
-### Primeiro Acesso
-
-1. Faça login com a senha configurada no `.env`
-2. Vá para **Cadastros** e adicione:
-   - Materiais (ex: Alumínio, Cobre, Ferro)
-   - Parceiros (fornecedores e clientes)
-3. Comece a registrar **Entradas** (compras) e **Saídas** (vendas)
-4. Acompanhe o negócio pelo **Dashboard** e **Relatórios**
-
-### Fluxo de Trabalho Recomendado
-
-1. **Cadastro inicial**: Configure materiais e parceiros
-2. **Registro de entradas**: Registre as compras de material
-3. **Controle de estoque**: Monitore os níveis de estoque
-4. **Registro de saídas**: Registre as vendas (o sistema valida o estoque)
-5. **Análise**: Use o Dashboard e Relatórios para tomar decisões
+6. **Acesse no navegador**: `http://localhost:8501`
 
 ## Deploy no Railway
 
-### Preparação
+### Passo a Passo
 
-1. Crie uma conta em [railway.app](https://railway.app)
-2. Certifique-se de que todos os arquivos estão commitados no Git
-
-### Deploy via GitHub
-
-1. **Conecte seu repositório**:
-   - Faça login no Railway
-   - Clique em "New Project"
-   - Selecione "Deploy from GitHub repo"
+1. **Crie o projeto no Railway**:
+   - Faça login em [railway.app](https://railway.app)
+   - Clique em "New Project" → "Deploy from GitHub repo"
    - Escolha o repositório do projeto
 
-2. **Configure as variáveis de ambiente**:
-   - No painel do Railway, vá em "Variables"
-   - Adicione:
-     ```
-     APP_NAME=Sistema de Controle de Sucata
-     APP_PASSWORD=suasenhaforteaqui
-     ```
+2. **Adicione o plugin PostgreSQL**:
+   - No painel do projeto, clique em "+ New" → "Database" → "PostgreSQL"
+   - A variável `DATABASE_URL` será injetada automaticamente
 
-3. **Aguarde o deploy**:
-   - O Railway detectará automaticamente o `requirements.txt`
-   - O build será feito automaticamente
+3. **Configure as variáveis de ambiente** (em "Variables"):
+   ```
+   APP_NAME=Sistema de Controle de Sucata
+   APP_PASSWORD=suasenhaforteaqui
+   ```
+   > `DATABASE_URL` é configurada automaticamente pelo plugin PostgreSQL — não é necessário adicionar manualmente.
 
-4. **Configure o comando de inicialização**:
-   - Em "Settings", adicione o comando:
-     ```
-     streamlit run app.py --server.port=$PORT --server.address=0.0.0.0
-     ```
+4. **O `railway.toml` já está configurado** com o comando de start correto:
+   ```toml
+   [deploy]
+   startCommand = "streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
+   ```
 
-5. **Acesse sua aplicação**:
-   - O Railway fornecerá uma URL pública
-   - Acesse e faça login com sua senha
+5. **Aguarde o deploy** — o Railway detecta o `requirements.txt` e instala as dependências automaticamente.
 
-### Deploy via Railway CLI
-
-```bash
-# Instale o Railway CLI
-npm i -g @railway/cli
-
-# Faça login
-railway login
-
-# Inicialize o projeto
-railway init
-
-# Configure as variáveis
-railway variables set APP_PASSWORD=suasenhaaqui
-
-# Deploy
-railway up
-```
+6. **Primeiro acesso**: O banco de dados (tabelas) é criado automaticamente na primeira inicialização.
 
 ## Banco de Dados
 
-O sistema usa **SQLite** (arquivo `data.db`) que é criado automaticamente ao iniciar a aplicação.
+O sistema usa **PostgreSQL**. A conexão é feita via variável de ambiente `DATABASE_URL`.
 
 ### Tabelas
 
-- **materials**: Materiais (alumínio, cobre, etc.)
+- **materials**: Materiais (alumínio, cobre, ferro, etc.)
 - **partners**: Parceiros (fornecedores e clientes)
 - **transactions**: Transações (entradas e saídas)
+- **prices**: Preços vigentes por material
+- **canhotos**: Recibos de atendimento
+- **canhoto_items**: Itens de cada canhoto
 
 ### Backup
 
-Para fazer backup, basta copiar o arquivo `data.db`:
+Use o plugin nativo do Railway ou ferramentas padrão PostgreSQL:
 
 ```bash
-# Criar backup
-cp data.db backup_data_$(date +%Y%m%d).db
+# Exportar
+pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
 
-# Restaurar backup
-cp backup_data_20240101.db data.db
+# Restaurar
+psql $DATABASE_URL < backup_20260101.sql
 ```
 
 ## Segurança
 
-- **Autenticação**: Sistema protegido por senha
+- **Autenticação**: Sistema protegido por senha via variável de ambiente
 - **Validações**: Validação de estoque antes de permitir saídas
-- **Soft Delete**: Materiais e parceiros são desativados, não excluídos
-- **Dados locais**: Banco SQLite mantido localmente (ou no servidor de deploy)
+- **Soft Delete**: Materiais e parceiros são desativados, não excluídos permanentemente
+- **Parameterização SQL**: Todas as queries usam `%s` parametrizado (proteção contra SQL injection)
 
 ## Tecnologias Utilizadas
 
 - **Python 3.8+**
 - **Streamlit 1.32.0**: Framework web para aplicações de dados
-- **SQLite**: Banco de dados embutido
+- **PostgreSQL**: Banco de dados relacional
+- **psycopg2-binary 2.9.9**: Driver PostgreSQL para Python
 - **Pandas 2.2.0**: Manipulação e análise de dados
 - **Python-dotenv 1.0.1**: Gerenciamento de variáveis de ambiente
 
-## Suporte e Manutenção
+## Problemas Comuns
 
-### Problemas Comuns
+**Erro: "APP_PASSWORD não configurado"**
+- Solução: Defina a variável `APP_PASSWORD` nas variáveis de ambiente (Railway ou `.env` local)
 
-**Erro ao iniciar: "APP_PASSWORD não configurado"**
-- Solução: Copie `.env.example` para `.env` e defina uma senha
-
-**Banco de dados não encontrado**
-- Solução: O banco é criado automaticamente ao iniciar. Verifique permissões de escrita
+**Erro de conexão com o banco**
+- Verifique se `DATABASE_URL` está corretamente configurada
+- No Railway: confirme que o plugin PostgreSQL está adicionado ao projeto
 
 **Página não carrega**
-- Solução: Verifique se todas as dependências estão instaladas com `pip install -r requirements.txt`
+- Verifique se todas as dependências estão instaladas: `pip install -r requirements.txt`
 
-### Atualizações
-
-Para atualizar o sistema:
+## Atualizações
 
 ```bash
-# Atualize o código
 git pull
-
-# Atualize as dependências
 pip install -r requirements.txt --upgrade
-
-# Reinicie a aplicação
 streamlit run app.py
 ```
 
-## Licença
-
-Este projeto foi desenvolvido para uso pessoal/comercial.
-
-## Autor
-
-Sistema desenvolvido para controle de sucata.
-
 ---
 
-**Versão**: 1.0.0
-**Data**: Janeiro 2026
+**Versão**: 2.0.0 (PostgreSQL)
+**Data**: Fevereiro 2026

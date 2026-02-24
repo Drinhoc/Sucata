@@ -17,7 +17,7 @@ from services import (
     get_partner_analysis,
 )
 
-st.set_page_config(page_title="Relatórios", page_icon="📈", layout="wide")
+st.set_page_config(page_title="Relatórios", page_icon="📈", layout="centered")
 
 # Verifica autenticação
 if "authenticated" not in st.session_state or not st.session_state.authenticated:
@@ -32,28 +32,27 @@ st.markdown("---")
 # FILTROS GLOBAIS
 # ============================================
 
-col_f1, col_f2, col_f3 = st.columns([2, 1.5, 1.5])
+period_option = st.selectbox(
+    "Período",
+    ["Últimos 7 dias", "Últimos 15 dias", "Últimos 30 dias",
+     "Últimos 90 dias", "Último ano", "Personalizado"],
+    index=2
+)
+if period_option == "Personalizado":
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        start_date = st.date_input("De", value=date.today() - timedelta(days=30))
+    with col_d2:
+        end_date = st.date_input("Até", value=date.today())
+else:
+    days_map = {
+        "Últimos 7 dias": 7, "Últimos 15 dias": 15,
+        "Últimos 30 dias": 30, "Últimos 90 dias": 90, "Último ano": 365
+    }
+    start_date = date.today() - timedelta(days=days_map[period_option])
+    end_date = date.today()
 
-with col_f1:
-    period_option = st.selectbox(
-        "Período",
-        ["Últimos 7 dias", "Últimos 15 dias", "Últimos 30 dias",
-         "Últimos 90 dias", "Último ano", "Personalizado"],
-        index=2
-    )
-    if period_option == "Personalizado":
-        col_d1, col_d2 = st.columns(2)
-        with col_d1:
-            start_date = st.date_input("De", value=date.today() - timedelta(days=30))
-        with col_d2:
-            end_date = st.date_input("Até", value=date.today())
-    else:
-        days_map = {
-            "Últimos 7 dias": 7, "Últimos 15 dias": 15,
-            "Últimos 30 dias": 30, "Últimos 90 dias": 90, "Último ano": 365
-        }
-        start_date = date.today() - timedelta(days=days_map[period_option])
-        end_date = date.today()
+col_f2, col_f3 = st.columns(2)
 
 with col_f2:
     materials = get_all_materials(active_only=False)
@@ -449,7 +448,8 @@ with tab5:
         df_all = pd.DataFrame(transactions)
 
         # Stats rápidos
-        col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+        col_s1, col_s2 = st.columns(2)
+        col_s3, col_s4 = st.columns(2)
         with col_s1:
             st.metric("Total de transações", len(df_all))
         with col_s2:
@@ -487,7 +487,7 @@ with tab5:
             'Data', 'Tipo', 'Material', 'Parceiro',
             'Peso', 'Preço/kg', 'Valor Total', 'Observações'
         ]
-        st.dataframe(df_display, use_container_width=True, hide_index=True, height=420)
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
 
         # Exportação
         st.markdown("---")
