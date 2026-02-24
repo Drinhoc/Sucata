@@ -15,7 +15,9 @@ from services import (
     create_partner,
     update_partner,
     deactivate_partner,
-    activate_partner
+    activate_partner,
+    get_current_prices,
+    update_price,
 )
 
 st.set_page_config(page_title="Cadastros", page_icon="📝", layout="wide")
@@ -30,7 +32,7 @@ st.markdown("Gerencie materiais e parceiros")
 st.markdown("---")
 
 # Seletor de tipo de cadastro
-tab_materials, tab_partners = st.tabs(["📦 Materiais", "🤝 Parceiros"])
+tab_materials, tab_partners, tab_prices = st.tabs(["📦 Materiais", "🤝 Parceiros", "💲 Preços Vigentes"])
 
 # ============================================
 # ABA DE MATERIAIS
@@ -245,6 +247,63 @@ with tab_partners:
                     st.divider()
         else:
             st.info("📭 Nenhum parceiro cadastrado ainda")
+
+# ============================================
+# ABA DE PREÇOS VIGENTES
+# ============================================
+
+with tab_prices:
+    st.markdown("### 💲 Tabela de Preços Vigentes")
+    st.info(
+        "Defina o preço de compra por kg de cada material. "
+        "O operador usará esses preços automaticamente ao registrar um atendimento. "
+        "Atualize sempre que os preços mudarem."
+    )
+    st.markdown("---")
+
+    prices_data = get_current_prices()
+
+    if not prices_data:
+        st.warning("⚠️ Nenhum material ativo cadastrado. Adicione materiais na aba Materiais.")
+    else:
+        col_header1, col_header2, col_header3 = st.columns([3, 2, 2])
+        with col_header1:
+            st.markdown("**Material**")
+        with col_header2:
+            st.markdown("**Preço atual (R$/kg)**")
+        with col_header3:
+            st.markdown("**Última atualização**")
+
+        st.markdown("---")
+
+        for mat in prices_data:
+            col1, col2, col3 = st.columns([3, 2, 2])
+
+            with col1:
+                st.write(f"**{mat['name']}** ({mat['unit']})")
+
+            with col2:
+                new_price = st.number_input(
+                    label=f"Preço {mat['name']}",
+                    label_visibility="collapsed",
+                    value=float(mat['price_per_kg']),
+                    min_value=0.0,
+                    step=0.10,
+                    format="%.2f",
+                    key=f"price_{mat['id']}"
+                )
+                if st.button("💾 Salvar", key=f"save_price_{mat['id']}", use_container_width=True):
+                    update_price(mat['id'], new_price)
+                    st.success(f"✅ Preço de {mat['name']} atualizado!")
+                    st.rerun()
+
+            with col3:
+                if mat['updated_at']:
+                    st.caption(mat['updated_at'])
+                else:
+                    st.caption("Não definido")
+
+            st.divider()
 
 st.markdown("---")
 st.caption("💡 Dica: Desative materiais e parceiros em vez de excluí-los para manter o histórico")

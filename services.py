@@ -352,6 +352,208 @@ def get_stock_value_estimate() -> float:
     return result[0]['total_value'] if result and result[0]['total_value'] else 0.0
 
 
+# ============================================
+# PREÇOS VIGENTES
+# ============================================
+
+def get_current_prices() -> List[Dict[str, Any]]:
+    """Retorna todos os materiais ativos com seus preços vigentes"""
+    query = """
+        SELECT
+            m.id,
+            m.name,
+            m.unit,
+            COALESCE(p.price_per_kg, 0) as price_per_kg,
+            p.updated_at
+        FROM materials m
+        LEFT JOIN prices p ON m.id = p.material_id
+        WHERE m.active = 1
+        ORDER BY m.name
+    """
+    return execute_query(query)
+
+
+def get_price_for_material(material_id: int) -> float:
+    """Retorna o preço vigente por kg de um material"""
+    result = execute_query(
+        "SELECT price_per_kg FROM prices WHERE material_id = ?", (material_id,)
+    )
+    return result[0]['price_per_kg'] if result else 0.0
+
+
+def update_price(material_id: int, price_per_kg: float) -> bool:
+    """Cria ou atualiza o preço vigente de um material"""
+    existing = execute_query(
+        "SELECT id FROM prices WHERE material_id = ?", (material_id,)
+    )
+    if existing:
+        execute_update(
+            "UPDATE prices SET price_per_kg = ?, updated_at = CURRENT_TIMESTAMP WHERE material_id = ?",
+            (price_per_kg, material_id)
+        )
+    else:
+        execute_insert(
+            "INSERT INTO prices (material_id, price_per_kg) VALUES (?, ?)",
+            (material_id, price_per_kg)
+        )
+    return True
+
+
+# ============================================
+# CANHOTOS
+# ============================================
+
+def _get_next_canhoto_number() -> str:
+    """Gera o próximo número sequencial de canhoto (ex: 0001, 0047)"""
+    result = execute_query("SELECT COUNT(*) as total FROM canhotos")
+    next_num = (result[0]['total'] if result else 0) + 1
+    return f"{next_num:04d}"
+
+
+def create_canhoto(
+    items: List[Dict[str, Any]],
+    client_name: str = "",
+    partner_id: Optional[int] = None
+) -> int:
+    """
+    Cria um novo canhoto pendente com os itens fornecidos.
+
+    Args:
+        items: Lista de dicts com material_id, weight_kg, price_per_kg, total_value
+        client_name: Nome opcional do cliente
+        partner_id: ID do parceiro cadastrado (opcional)
+
+    Returns:
+        ID do canhoto criado
+    """
+    number = _get_next_canhoto_number()
+    total_value = sum(item['total_value'] for item in items)
+    today = date.today()
+
+    canhoto_id = execute_insert(
+        """
+        INSERT INTO canhotos (number, date, client_name, partner_id, status, total_value)
+        VALUES (?, ?, ?, ?, 'pendente', ?)
+        """,
+        (number, today, client_name.strip() or None, partner_id, total_value)
+    )
+
+    for item in items:
+        execute_insert(
+            """
+            INSERT INTO canhoto_items (canhoto_id, material_id, weight_kg, price_per_kg, total_value)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (canhoto_id, item['material_id'], item['weight_kg'],
+             item['price_per_kg'], item['total_value'])
+        )
+
+    return canhoto_id
+
+
+def get_canhotos(status: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Retorna canhotos com filtro opcional de status.
+
+    Args:
+        status: 'pendente', 'confirmado' ou 'cancelado'. None retorna todos.
+    """
+    query = """
+        SELECT
+            c.*,
+            COUNT(ci.id) as items_count
+        FROM canhotos c
+        LEFT JOIN canhoto_items ci ON c.id = ci.canhoto_id
+        WHERE 1=1
+    """
+    params = []
+    if status:
+        query += " AND c.status = ?"
+        params.append(status)
+
+    query += " GROUP BY c.id ORDER BY c.created_at DESC"
+    return execute_query(query, tuple(params))
+
+
+def get_canhoto_with_items(canhoto_id: int) -> Optional[Dict[str, Any]]:
+    """Retorna um canhoto com todos os seus itens"""
+    canhoto = execute_query("SELECT * FROM canhotos WHERE id = ?", (canhoto_id,))
+    if not canhoto:
+        return None
+
+    items = execute_query(
+        """
+        SELECT ci.*, m.name as material_name, m.unit as material_unit
+        FROM canhoto_items ci
+        JOIN materials m ON ci.material_id = m.id
+        WHERE ci.canhoto_id = ?
+        ORDER BY ci.id
+        """,
+        (canhoto_id,)
+    )
+
+    result = dict(canhoto[0])
+    result['items'] = items
+    return result
+
+
+def confirm_canhoto(canhoto_id: int) -> Tuple[bool, str]:
+    """
+    Confirma o pagamento de um canhoto e registra as transações de entrada.
+
+    Returns:
+        Tuple[bool, str]: (sucesso, mensagem)
+    """
+    canhoto = get_canhoto_with_items(canhoto_id)
+    if not canhoto:
+        return False, "Canhoto não encontrado"
+    if canhoto['status'] != 'pendente':
+        return False, f"Canhoto já está {canhoto['status']}"
+
+    # Resolve parceiro: usa cadastrado ou cria/busca "Cliente Avulso"
+    partner_id = canhoto['partner_id']
+    if not partner_id:
+        existing = execute_query(
+            "SELECT id FROM partners WHERE name = 'Cliente Avulso' LIMIT 1"
+        )
+        if existing:
+            partner_id = existing[0]['id']
+        else:
+            partner_id = execute_insert(
+                "INSERT INTO partners (name, type, phone, active) VALUES ('Cliente Avulso', 'fornecedor', '', 1)",
+                ()
+            )
+
+    today = date.today()
+    notes_base = f"Canhoto #{canhoto['number']}"
+    if canhoto['client_name']:
+        notes_base += f" — {canhoto['client_name']}"
+
+    for item in canhoto['items']:
+        execute_insert(
+            """
+            INSERT INTO transactions
+                (date, type, material_id, partner_id, weight_kg, price_per_kg, total_value, notes)
+            VALUES (?, 'entrada', ?, ?, ?, ?, ?, ?)
+            """,
+            (today, item['material_id'], partner_id,
+             item['weight_kg'], item['price_per_kg'], item['total_value'], notes_base)
+        )
+
+    execute_update(
+        "UPDATE canhotos SET status = 'confirmado' WHERE id = ?", (canhoto_id,)
+    )
+    return True, "Pagamento confirmado e transações registradas!"
+
+
+def cancel_canhoto(canhoto_id: int) -> bool:
+    """Cancela um canhoto pendente"""
+    rows = execute_update(
+        "UPDATE canhotos SET status = 'cancelado' WHERE id = ?", (canhoto_id,)
+    )
+    return rows > 0
+
+
 def get_material_summary(
     start_date: Optional[date] = None,
     end_date: Optional[date] = None

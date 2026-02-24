@@ -8,7 +8,8 @@ from contextlib import contextmanager
 from typing import List, Dict, Any
 import os
 
-DB_PATH = "data.db"
+_DATA_DIR = os.getenv("DATA_DIR", ".")
+DB_PATH = os.path.join(_DATA_DIR, "data.db")
 
 
 @contextmanager
@@ -65,6 +66,47 @@ def init_database():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (material_id) REFERENCES materials(id),
                 FOREIGN KEY (partner_id) REFERENCES partners(id)
+            )
+        """)
+
+        # Tabela de preços vigentes por material
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS prices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                material_id INTEGER NOT NULL UNIQUE,
+                price_per_kg REAL NOT NULL DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (material_id) REFERENCES materials(id)
+            )
+        """)
+
+        # Tabela de canhotos (recibos de atendimento)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS canhotos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                number TEXT NOT NULL UNIQUE,
+                date DATE NOT NULL,
+                client_name TEXT,
+                partner_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'pendente'
+                    CHECK(status IN ('pendente', 'confirmado', 'cancelado')),
+                total_value REAL NOT NULL DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (partner_id) REFERENCES partners(id)
+            )
+        """)
+
+        # Tabela de itens de cada canhoto
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS canhoto_items (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                canhoto_id INTEGER NOT NULL,
+                material_id INTEGER NOT NULL,
+                weight_kg REAL NOT NULL,
+                price_per_kg REAL NOT NULL,
+                total_value REAL NOT NULL,
+                FOREIGN KEY (canhoto_id) REFERENCES canhotos(id),
+                FOREIGN KEY (material_id) REFERENCES materials(id)
             )
         """)
 
