@@ -107,7 +107,8 @@ with st.form("form_entrada", clear_on_submit=True):
             partner_id=selected_partner,
             weight_kg=weight,
             price_per_kg=price_per_kg,
-            notes=notes
+            notes=notes,
+            role=st.session_state.get("role", "operador")
         )
         if success:
             log_action(

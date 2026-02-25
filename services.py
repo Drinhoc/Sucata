@@ -304,7 +304,7 @@ def create_transaction(
     weight_kg: float,
     price_per_kg: float,
     notes: str = "",
-    role: str = "admin"
+    role: str = "operador"
 ) -> Tuple[bool, str, Optional[int]]:
     """Cria uma nova transação (entrada ou saída).
 

@@ -134,7 +134,8 @@ with st.form("form_saida", clear_on_submit=True):
                 partner_id=selected_partner,
                 weight_kg=weight,
                 price_per_kg=price_per_kg,
-                notes=notes
+                notes=notes,
+                role=st.session_state.get("role", "operador")
             )
             if success:
                 cliente_label = partner_options.get(selected_partner, "—") if selected_partner else "Ajuste Manual"
