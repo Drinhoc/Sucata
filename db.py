@@ -98,8 +98,8 @@ def init_database():
                 material_id INTEGER NOT NULL,
                 partner_id INTEGER,
                 weight_kg REAL NOT NULL CHECK(weight_kg > 0),
-                price_per_kg REAL NOT NULL CHECK(price_per_kg >= 0),
-                total_value REAL NOT NULL,
+                price_per_kg NUMERIC(12,2) NOT NULL CHECK(price_per_kg >= 0),
+                total_value NUMERIC(12,2) NOT NULL,
                 notes TEXT,
                 created_at TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY (material_id) REFERENCES materials(id),
@@ -112,12 +112,68 @@ def init_database():
             ALTER TABLE transactions ALTER COLUMN partner_id DROP NOT NULL
         """)
 
+        # Migration: colunas monetárias de REAL para NUMERIC(12,2)
+        # Usar DO $$ para ser idempotente: só converte se ainda for REAL
+        cursor.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='transactions' AND column_name='price_per_kg' AND data_type='real'
+                ) THEN
+                    ALTER TABLE transactions
+                        ALTER COLUMN price_per_kg TYPE NUMERIC(12,2) USING price_per_kg::NUMERIC(12,2),
+                        ALTER COLUMN total_value  TYPE NUMERIC(12,2) USING total_value::NUMERIC(12,2);
+                END IF;
+            END $$;
+        """)
+
+        cursor.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='prices' AND column_name='price_per_kg' AND data_type='real'
+                ) THEN
+                    ALTER TABLE prices
+                        ALTER COLUMN price_per_kg TYPE NUMERIC(12,2) USING price_per_kg::NUMERIC(12,2);
+                END IF;
+            END $$;
+        """)
+
+        cursor.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='canhotos' AND column_name='total_value' AND data_type='real'
+                ) THEN
+                    ALTER TABLE canhotos
+                        ALTER COLUMN total_value TYPE NUMERIC(12,2) USING total_value::NUMERIC(12,2);
+                END IF;
+            END $$;
+        """)
+
+        cursor.execute("""
+            DO $$
+            BEGIN
+                IF EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='canhoto_items' AND column_name='price_per_kg' AND data_type='real'
+                ) THEN
+                    ALTER TABLE canhoto_items
+                        ALTER COLUMN price_per_kg TYPE NUMERIC(12,2) USING price_per_kg::NUMERIC(12,2),
+                        ALTER COLUMN total_value  TYPE NUMERIC(12,2) USING total_value::NUMERIC(12,2);
+                END IF;
+            END $$;
+        """)
+
         # Tabela de preços vigentes por material
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS prices (
                 id SERIAL PRIMARY KEY,
                 material_id INTEGER NOT NULL UNIQUE,
-                price_per_kg REAL NOT NULL DEFAULT 0,
+                price_per_kg NUMERIC(12,2) NOT NULL DEFAULT 0,
                 updated_at TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY (material_id) REFERENCES materials(id)
             )
@@ -133,7 +189,7 @@ def init_database():
                 partner_id INTEGER,
                 status TEXT NOT NULL DEFAULT 'pendente'
                     CHECK(status IN ('pendente', 'confirmado', 'cancelado')),
-                total_value REAL NOT NULL DEFAULT 0,
+                total_value NUMERIC(12,2) NOT NULL DEFAULT 0,
                 created_at TIMESTAMP DEFAULT NOW(),
                 FOREIGN KEY (partner_id) REFERENCES partners(id)
             )
@@ -146,8 +202,8 @@ def init_database():
                 canhoto_id INTEGER NOT NULL,
                 material_id INTEGER NOT NULL,
                 weight_kg REAL NOT NULL,
-                price_per_kg REAL NOT NULL,
-                total_value REAL NOT NULL,
+                price_per_kg NUMERIC(12,2) NOT NULL,
+                total_value NUMERIC(12,2) NOT NULL,
                 FOREIGN KEY (canhoto_id) REFERENCES canhotos(id),
                 FOREIGN KEY (material_id) REFERENCES materials(id)
             )
