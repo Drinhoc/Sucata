@@ -18,6 +18,9 @@ def get_db_connection():
     conn = psycopg2.connect(DATABASE_URL)
     try:
         yield conn
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         conn.close()
 

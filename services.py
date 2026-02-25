@@ -4,9 +4,11 @@ Contém todas as operações relacionadas a materiais, parceiros e transações
 """
 
 import json
+import logging
 import random
 import string
 import bcrypt as _bcrypt
+from decimal import Decimal, ROUND_HALF_UP
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional, Tuple
 from db import execute_query, execute_insert, execute_update, execute_in_transaction
@@ -105,8 +107,8 @@ def log_action(
             (user_id, username, action, entity, entity_id,
              json.dumps(details or {}, ensure_ascii=False))
         )
-    except Exception:
-        pass
+    except Exception as e:
+        logging.error(f"[AUDIT FAIL] action={action} entity={entity} id={entity_id}: {e}")
 
 
 def get_audit_logs(
@@ -329,7 +331,9 @@ def create_transaction(
         if weight_kg > current_stock:
             return False, f"Estoque insuficiente. Disponível: {current_stock:.2f} kg", None
 
-    total_value = weight_kg * price_per_kg
+    total_value = (
+        Decimal(str(weight_kg)) * Decimal(str(price_per_kg))
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
 
     query = """
         INSERT INTO transactions
@@ -626,7 +630,9 @@ def create_canhoto(
 ) -> int:
     """Cria um novo canhoto pendente com os itens fornecidos"""
     number = _get_next_canhoto_number()
-    total_value = sum(item['total_value'] for item in items)
+    total_value = sum(
+        Decimal(str(item['total_value'])) for item in items
+    ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     today = date.today()
 
     canhoto_id = execute_insert(
