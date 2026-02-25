@@ -300,7 +300,7 @@ def create_transaction(
     transaction_date: date,
     transaction_type: str,
     material_id: int,
-    partner_id: int,
+    partner_id: Optional[int],
     weight_kg: float,
     price_per_kg: float,
     notes: str = "",
@@ -363,7 +363,7 @@ def get_transactions(
             p.type as partner_type
         FROM transactions t
         JOIN materials m ON t.material_id = m.id
-        JOIN partners p ON t.partner_id = p.id
+        LEFT JOIN partners p ON t.partner_id = p.id
         WHERE 1=1
     """
     params = []

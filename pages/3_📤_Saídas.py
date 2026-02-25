@@ -35,6 +35,11 @@ st.markdown("---")
 
 st.markdown("### ➕ Nova Saída")
 
+is_ajuste = st.checkbox(
+    "🔧 Ajuste manual (sem comprador)",
+    help="Permite remover estoque sem vínculo a comprador. Use apenas para correções administrativas."
+)
+
 with st.form("form_saida", clear_on_submit=True):
     saida_date = st.date_input(
         "Data da Saída",
@@ -53,27 +58,33 @@ with st.form("form_saida", clear_on_submit=True):
         "Material",
         options=list(material_options.keys()),
         format_func=lambda x: material_options[x],
-        help="Selecione o material vendido"
+        help="Selecione o material"
     )
 
     current_stock = get_current_stock(selected_material)
     st.info(f"📦 Estoque disponível: **{current_stock:.2f} kg**")
 
-    partners = get_all_partners(active_only=True, partner_type='cliente')
-    if not partners:
-        st.error("❌ Nenhum cliente cadastrado. Cadastre parceiros primeiro.")
-        st.stop()
+    partner_options = {}
+    selected_partner = None
 
-    partner_options = {
-        p['id']: f"{p['name']} ({p['phone']})" if p['phone'] else p['name']
-        for p in partners
-    }
-    selected_partner = st.selectbox(
-        "Cliente",
-        options=list(partner_options.keys()),
-        format_func=lambda x: partner_options[x],
-        help="Selecione o cliente"
-    )
+    if is_ajuste:
+        st.warning("🔧 Modo Ajuste Manual — saída sem vínculo a comprador")
+    else:
+        partners = get_all_partners(active_only=True, partner_type='cliente')
+        if not partners:
+            st.error("❌ Nenhum cliente cadastrado. Cadastre parceiros primeiro.")
+            st.stop()
+
+        partner_options = {
+            p['id']: f"{p['name']} ({p['phone']})" if p['phone'] else p['name']
+            for p in partners
+        }
+        selected_partner = st.selectbox(
+            "Cliente",
+            options=list(partner_options.keys()),
+            format_func=lambda x: partner_options[x],
+            help="Selecione o cliente"
+        )
 
     col_w, col_p = st.columns(2)
     with col_w:
@@ -126,14 +137,16 @@ with st.form("form_saida", clear_on_submit=True):
                 notes=notes
             )
             if success:
+                cliente_label = partner_options.get(selected_partner, "—") if selected_partner else "Ajuste Manual"
                 log_action(
                     st.session_state.get('user_id', 0),
                     st.session_state.get('username', '?'),
                     "CREATE", "transaction", transaction_id,
                     {
                         "tipo": "saida",
+                        "ajuste_manual": is_ajuste,
                         "material": material_options[selected_material],
-                        "cliente": partner_options[selected_partner],
+                        "cliente": cliente_label,
                         "peso_kg": weight,
                         "preco_kg": price_per_kg,
                         "valor_total": round(weight * price_per_kg, 2),
@@ -208,6 +221,7 @@ if transactions:
         'date', 'material_name', 'partner_name',
         'weight_kg', 'price_per_kg', 'total_value', 'notes'
     ]].copy()
+    df_display['partner_name'] = df_display['partner_name'].fillna('— Ajuste Manual')
     df_display['weight_kg'] = df_display['weight_kg'].apply(lambda x: f"{x:.2f} kg")
     df_display['price_per_kg'] = df_display['price_per_kg'].apply(lambda x: f"R$ {x:.2f}/kg")
     df_display['total_value'] = df_display['total_value'].apply(lambda x: f"R$ {x:,.2f}")

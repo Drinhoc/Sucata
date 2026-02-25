@@ -96,7 +96,7 @@ def init_database():
                 date DATE NOT NULL,
                 type TEXT NOT NULL CHECK(type IN ('entrada', 'saida')),
                 material_id INTEGER NOT NULL,
-                partner_id INTEGER NOT NULL,
+                partner_id INTEGER,
                 weight_kg REAL NOT NULL CHECK(weight_kg > 0),
                 price_per_kg REAL NOT NULL CHECK(price_per_kg >= 0),
                 total_value REAL NOT NULL,
@@ -105,6 +105,11 @@ def init_database():
                 FOREIGN KEY (material_id) REFERENCES materials(id),
                 FOREIGN KEY (partner_id) REFERENCES partners(id)
             )
+        """)
+
+        # Migration: permite partner_id nulo (ajuste manual sem comprador)
+        cursor.execute("""
+            ALTER TABLE transactions ALTER COLUMN partner_id DROP NOT NULL
         """)
 
         # Tabela de preços vigentes por material
