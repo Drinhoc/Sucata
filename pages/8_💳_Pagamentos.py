@@ -4,14 +4,12 @@ Confirmação de pagamento dos canhotos pendentes e histórico
 """
 
 import streamlit as st
+from auth import require_auth
 from services import get_canhotos, get_canhoto_with_items, confirm_canhoto, cancel_canhoto, log_action
 
 st.set_page_config(page_title="Pagamentos", page_icon="💳", layout="centered")
 
-# Verifica autenticação
-if "authenticated" not in st.session_state or not st.session_state.authenticated:
-    st.error("⚠️ Acesso negado. Faça login na página principal.")
-    st.stop()
+require_auth()
 
 st.title("💳 Pagamentos — Balcão")
 st.markdown("Confirme o pagamento dos canhotos emitidos pelo operador.")

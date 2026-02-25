@@ -7,6 +7,7 @@ Por Material, Por Parceiro e Transações detalhadas.
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+from auth import require_auth
 from services import (
     get_transactions,
     get_all_materials,
@@ -19,10 +20,7 @@ from services import (
 
 st.set_page_config(page_title="Relatórios", page_icon="📈", layout="centered")
 
-# Verifica autenticação
-if "authenticated" not in st.session_state or not st.session_state.authenticated:
-    st.error("⚠️ Acesso negado. Faça login na página principal.")
-    st.stop()
+require_auth()
 
 st.title("📈 Relatórios")
 st.markdown("Análises completas do período selecionado")

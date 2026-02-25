@@ -7,21 +7,12 @@ import json
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+from auth import require_auth
 from services import get_audit_logs, get_all_users
 
 st.set_page_config(page_title="Logs de Auditoria", page_icon="🔐", layout="centered")
 
-# Verifica autenticação
-if not st.session_state.get("authenticated"):
-    st.error("⚠️ Acesso negado. Faça login na página principal.")
-    st.stop()
-
-# Exclusivo para admins — a aba não aparece no menu para operadores
-# (Streamlit 1.32 não suporta ocultar páginas dinamicamente;
-#  a restrição é feita aqui no conteúdo da página)
-if st.session_state.get("role") != "admin":
-    st.error("🚫 Acesso restrito a administradores.")
-    st.stop()
+require_auth(required_role="admin")
 
 st.title("🔐 Logs de Auditoria")
 st.markdown("Registro completo de todas as operações realizadas no sistema.")

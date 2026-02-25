@@ -6,6 +6,7 @@ Registra a venda de materiais para clientes
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+from auth import require_auth
 from services import (
     get_all_materials,
     get_all_partners,
@@ -17,9 +18,11 @@ from services import (
 
 st.set_page_config(page_title="Saídas", page_icon="📤", layout="centered")
 
-# Verifica autenticação
-if "authenticated" not in st.session_state or not st.session_state.authenticated:
-    st.error("⚠️ Acesso negado. Faça login na página principal.")
+require_auth()
+
+# T3 — Saídas restritas a admin
+if st.session_state.get("role") != "admin":
+    st.error("🚫 Acesso restrito. Apenas administradores podem registrar saídas.")
     st.stop()
 
 st.title("📤 Saídas (Vendas)")

@@ -198,3 +198,25 @@ def execute_update(query: str, params: tuple = ()) -> int:
         cursor.execute(query, params)
         conn.commit()
         return cursor.rowcount
+
+
+def execute_in_transaction(queries_and_params: list) -> list:
+    """
+    Executa múltiplos INSERTs numa única transação atômica.
+    Cada entrada da lista deve ser uma tupla (query_str, params_tuple).
+    As queries NÃO devem incluir RETURNING — ele é adicionado automaticamente.
+    Retorna lista de IDs inseridos na mesma ordem.
+    Em caso de qualquer erro, faz rollback e re-lança a exceção.
+    """
+    with get_db_connection() as conn:
+        cursor = conn.cursor()
+        ids = []
+        try:
+            for query, params in queries_and_params:
+                cursor.execute(query.rstrip() + " RETURNING id", params)
+                ids.append(cursor.fetchone()[0])
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        return ids

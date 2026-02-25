@@ -6,14 +6,12 @@ Interface otimizada para mobile: registra materiais e gera canhotos
 import streamlit as st
 import streamlit.components.v1 as components
 from datetime import datetime
+from auth import require_auth
 from services import get_current_prices, create_canhoto, get_canhoto_with_items, log_action
 
 st.set_page_config(page_title="Operador", page_icon="🧾", layout="centered")
 
-# Verifica autenticação
-if "authenticated" not in st.session_state or not st.session_state.authenticated:
-    st.error("⚠️ Acesso negado. Faça login na página principal.")
-    st.stop()
+require_auth()
 
 
 # Inicializa estado da sessão

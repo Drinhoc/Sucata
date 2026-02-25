@@ -6,6 +6,7 @@ Visão geral do negócio com métricas e resumos
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+from auth import require_auth
 from services import (
     get_monthly_metrics,
     get_stock_value_estimate,
@@ -16,10 +17,7 @@ from services import (
 
 st.set_page_config(page_title="Dashboard", page_icon="📊", layout="centered")
 
-# Verifica autenticação
-if "authenticated" not in st.session_state or not st.session_state.authenticated:
-    st.error("⚠️ Acesso negado. Faça login na página principal.")
-    st.stop()
+require_auth()
 
 st.title("📊 Dashboard")
 st.markdown("Visão geral do seu negócio")

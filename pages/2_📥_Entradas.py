@@ -6,6 +6,7 @@ Registra a compra de materiais de fornecedores
 import streamlit as st
 import pandas as pd
 from datetime import date, timedelta
+from auth import require_auth
 from services import (
     get_all_materials,
     get_all_partners,
@@ -16,10 +17,7 @@ from services import (
 
 st.set_page_config(page_title="Entradas", page_icon="📥", layout="centered")
 
-# Verifica autenticação
-if "authenticated" not in st.session_state or not st.session_state.authenticated:
-    st.error("⚠️ Acesso negado. Faça login na página principal.")
-    st.stop()
+require_auth()
 
 st.title("📥 Entradas (Compras)")
 st.markdown("Registre a compra de materiais")

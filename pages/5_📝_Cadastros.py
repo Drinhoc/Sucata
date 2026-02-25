@@ -4,6 +4,7 @@ CRUD de materiais, parceiros, preços e usuários (admin)
 """
 
 import streamlit as st
+from auth import require_auth
 from services import (
     get_all_materials,
     create_material,
@@ -24,10 +25,7 @@ from services import (
 
 st.set_page_config(page_title="Cadastros", page_icon="📝", layout="centered")
 
-# Verifica autenticação
-if "authenticated" not in st.session_state or not st.session_state.authenticated:
-    st.error("⚠️ Acesso negado. Faça login na página principal.")
-    st.stop()
+require_auth()
 
 st.title("📝 Cadastros")
 st.markdown("Gerencie materiais e parceiros")
@@ -292,9 +290,14 @@ with tab_prices:
                     format="%.2f",
                     key=f"price_{mat['id']}"
                 )
-                if st.button("💾 Salvar", key=f"save_price_{mat['id']}", use_container_width=True):
+                if st.button(
+                    "💾 Salvar" if is_admin else "🔒 Sem permissão",
+                    key=f"save_price_{mat['id']}",
+                    use_container_width=True,
+                    disabled=not is_admin
+                ):
                     old_price = float(mat['price_per_kg'])
-                    update_price(mat['id'], new_price)
+                    update_price(mat['id'], new_price, role=st.session_state.get('role', 'operador'))
                     log_action(
                         st.session_state.get('user_id', 0),
                         st.session_state.get('username', '?'),

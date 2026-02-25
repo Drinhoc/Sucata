@@ -5,14 +5,12 @@ Visualização do estoque atual de todos os materiais
 
 import streamlit as st
 import pandas as pd
+from auth import require_auth
 from services import get_all_stock, get_current_stock
 
 st.set_page_config(page_title="Estoque", page_icon="📦", layout="centered")
 
-# Verifica autenticação
-if "authenticated" not in st.session_state or not st.session_state.authenticated:
-    st.error("⚠️ Acesso negado. Faça login na página principal.")
-    st.stop()
+require_auth()
 
 st.title("📦 Estoque")
 st.markdown("Visualização do estoque atual")

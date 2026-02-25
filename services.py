@@ -4,10 +4,12 @@ Contém todas as operações relacionadas a materiais, parceiros e transações
 """
 
 import json
+import random
+import string
 import bcrypt as _bcrypt
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional, Tuple
-from db import execute_query, execute_insert, execute_update
+from db import execute_query, execute_insert, execute_update, execute_in_transaction
 
 
 # ============================================
@@ -301,9 +303,18 @@ def create_transaction(
     partner_id: int,
     weight_kg: float,
     price_per_kg: float,
-    notes: str = ""
+    notes: str = "",
+    role: str = "admin"
 ) -> Tuple[bool, str, Optional[int]]:
-    """Cria uma nova transação (entrada ou saída)"""
+    """Cria uma nova transação (entrada ou saída).
+
+    O parâmetro `role` aplica controle de permissão na camada de serviço:
+    operadores NÃO podem criar saídas normais (apenas via process_internal).
+    """
+    # T3 — Permissão por role
+    if transaction_type == "saida" and role != "admin":
+        return False, "Sem permissão para registrar saídas. Contacte um administrador.", None
+
     if transaction_type not in ['entrada', 'saida']:
         return False, "Tipo de transação inválido", None
 
@@ -484,8 +495,13 @@ def get_price_for_material(material_id: int) -> float:
     return result[0]['price_per_kg'] if result else 0.0
 
 
-def update_price(material_id: int, price_per_kg: float) -> bool:
-    """Cria ou atualiza o preço vigente de um material"""
+def update_price(material_id: int, price_per_kg: float, role: str = "admin") -> bool:
+    """Cria ou atualiza o preço vigente de um material.
+    Apenas administradores podem alterar preços.
+    """
+    if role != "admin":
+        return False
+
     existing = execute_query(
         "SELECT id FROM prices WHERE material_id = %s", (material_id,)
     )
@@ -500,6 +516,96 @@ def update_price(material_id: int, price_per_kg: float) -> bool:
             (material_id, price_per_kg)
         )
     return True
+
+
+# ============================================
+# T4 — PROCESSAMENTO INTERNO
+# ============================================
+
+_INTERNAL_PARTNER_NAME = "PROCESSAMENTO / PRENSA (INTERNO)"
+
+
+def ensure_internal_partner() -> int:
+    """Retorna o ID do parceiro interno de processamento, criando-o se necessário."""
+    existing = execute_query(
+        "SELECT id FROM partners WHERE name = %s LIMIT 1",
+        (_INTERNAL_PARTNER_NAME,)
+    )
+    if existing:
+        return existing[0]["id"]
+    return execute_insert(
+        "INSERT INTO partners (name, type, phone, active) VALUES (%s, 'ambos', '', 1)",
+        (_INTERNAL_PARTNER_NAME,)
+    )
+
+
+def _generate_proc_code() -> str:
+    """Gera um código único de processamento: PROC#YYYYMMDDHHMMSS-XXXX"""
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+    suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
+    return f"PROC#{timestamp}-{suffix}"
+
+
+def process_internal(
+    material_from_id: int,
+    material_to_id: int,
+    weight_kg: float,
+    user_id: int,
+    username: str,
+) -> Tuple[bool, str, str]:
+    """
+    Realiza um processamento interno: converte peso de um material em outro.
+
+    Cria atomicamente:
+      - 1 transação SAÍDA do material de origem (preço 0, valor 0)
+      - 1 transação ENTRADA no material de destino (preço 0, valor 0)
+
+    Ambas vinculadas ao mesmo código PROC# e ao parceiro interno fixo.
+    Acessível a admins e operadores.
+
+    Retorna (success, message, proc_code).
+    """
+    if material_from_id == material_to_id:
+        return False, "Material de origem e destino devem ser diferentes.", ""
+
+    if weight_kg <= 0:
+        return False, "O peso deve ser maior que zero.", ""
+
+    stock = get_current_stock(material_from_id)
+    if weight_kg > stock:
+        return False, f"Estoque insuficiente. Disponível: {stock:.2f} kg.", ""
+
+    partner_id = ensure_internal_partner()
+    proc_code = _generate_proc_code()
+    today = date.today()
+
+    saida_q = (
+        """INSERT INTO transactions
+               (date, type, material_id, partner_id, weight_kg, price_per_kg, total_value, notes)
+           VALUES (%s, 'saida', %s, %s, %s, 0, 0, %s)""",
+        (today, material_from_id, partner_id, weight_kg, proc_code),
+    )
+    entrada_q = (
+        """INSERT INTO transactions
+               (date, type, material_id, partner_id, weight_kg, price_per_kg, total_value, notes)
+           VALUES (%s, 'entrada', %s, %s, %s, 0, 0, %s)""",
+        (today, material_to_id, partner_id, weight_kg, proc_code),
+    )
+
+    try:
+        ids = execute_in_transaction([saida_q, entrada_q])
+        log_action(
+            user_id, username, "CREATE", "processamento", ids[0],
+            {
+                "proc_code": proc_code,
+                "material_from_id": material_from_id,
+                "material_to_id": material_to_id,
+                "peso_kg": weight_kg,
+            },
+        )
+        return True, "Processamento concluído com sucesso!", proc_code
+    except Exception as e:
+        return False, f"Erro no processamento: {str(e)}", ""
 
 
 # ============================================
