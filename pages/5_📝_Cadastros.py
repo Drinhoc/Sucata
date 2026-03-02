@@ -64,6 +64,12 @@ with tab_materials:
                 index=0
             )
 
+        mat_sku = st.text_input(
+            "SKU / Código",
+            placeholder="Ex: ALU-001, CU-FINO... (opcional, pode preencher depois)",
+            help="Código interno de identificação. Deixe em branco para preencher depois."
+        )
+
         submit_mat = st.form_submit_button(
             "💾 Cadastrar Material",
             type="primary",
@@ -75,12 +81,12 @@ with tab_materials:
                 st.error("❌ O nome do material é obrigatório")
             else:
                 try:
-                    mat_id = create_material(mat_name, mat_unit)
+                    mat_id = create_material(mat_name, mat_unit, mat_sku)
                     log_action(
                         st.session_state.get('user_id', 0),
                         st.session_state.get('username', '?'),
                         "CREATE", "material", mat_id,
-                        {"nome": mat_name.strip(), "unidade": mat_unit}
+                        {"nome": mat_name.strip(), "unidade": mat_unit, "sku": mat_sku.strip().upper() or None}
                     )
                     st.success(f"✅ Material '{mat_name}' cadastrado com sucesso!")
                     st.rerun()
@@ -99,7 +105,9 @@ with tab_materials:
 
             with col_info:
                 status_icon = "✅" if material['active'] else "⚫"
+                sku_badge = f"`{material['sku']}`  " if material.get('sku') else "*(sem SKU)*  "
                 st.write(f"{status_icon} **{material['name']}** — {material['unit']}")
+                st.caption(f"SKU: {sku_badge}")
 
             with col_action:
                 if material['active']:

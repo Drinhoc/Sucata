@@ -163,23 +163,25 @@ def get_material_by_id(material_id: int) -> Optional[Dict[str, Any]]:
     return results[0] if results else None
 
 
-def create_material(name: str, unit: str = "kg") -> int:
+def create_material(name: str, unit: str = "kg", sku: str = "") -> int:
     """Cria um novo material"""
+    sku_value = sku.strip().upper() or None
     query = """
-        INSERT INTO materials (name, unit, active)
-        VALUES (%s, %s, 1)
+        INSERT INTO materials (name, unit, sku, active)
+        VALUES (%s, %s, %s, 1)
     """
-    return execute_insert(query, (name.strip(), unit.strip()))
+    return execute_insert(query, (name.strip(), unit.strip(), sku_value))
 
 
-def update_material(material_id: int, name: str, unit: str) -> bool:
+def update_material(material_id: int, name: str, unit: str, sku: str = "") -> bool:
     """Atualiza um material existente"""
+    sku_value = sku.strip().upper() or None
     query = """
         UPDATE materials
-        SET name = %s, unit = %s
+        SET name = %s, unit = %s, sku = %s
         WHERE id = %s
     """
-    rows_affected = execute_update(query, (name.strip(), unit.strip(), material_id))
+    rows_affected = execute_update(query, (name.strip(), unit.strip(), sku_value, material_id))
     return rows_affected > 0
 
 

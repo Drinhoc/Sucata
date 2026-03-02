@@ -73,11 +73,17 @@ def init_database():
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS materials (
                 id SERIAL PRIMARY KEY,
+                sku TEXT UNIQUE,
                 name TEXT NOT NULL UNIQUE,
                 unit TEXT NOT NULL DEFAULT 'kg',
                 active SMALLINT NOT NULL DEFAULT 1,
                 created_at TIMESTAMP DEFAULT NOW()
             )
+        """)
+
+        # Migration: adiciona coluna sku para bancos existentes
+        cursor.execute("""
+            ALTER TABLE materials ADD COLUMN IF NOT EXISTS sku TEXT UNIQUE
         """)
 
         # Tabela de parceiros (fornecedores e clientes)
