@@ -1,29 +1,52 @@
 # Sistema de Controle de Sucata
 
-Sistema web profissional e completo para gerenciamento de sucatas, desenvolvido com **Streamlit** e **PostgreSQL**.
+Sistema web para gerenciamento de sucatas, desenvolvido com **Streamlit** e **PostgreSQL**.
+
+---
 
 ## Funcionalidades
 
-- **Dashboard**: Visão geral do negócio com métricas mensais e resumos
-- **Entradas**: Registro de compras de materiais de fornecedores
-- **Saídas**: Registro de vendas com validação de estoque
-- **Estoque**: Consulta de estoque atual e valores estimados
-- **Cadastros**: Gerenciamento de materiais e parceiros (fornecedores/clientes)
-- **Relatórios**: Análises detalhadas com filtros e exportação CSV
-- **Operador (Canhotos)**: Geração de recibos e confirmação de pagamentos
-- **Login Simples**: Proteção por senha configurável
+| Módulo | Acesso | Descrição |
+|---|---|---|
+| **Dashboard** | Todos | Métricas mensais, resumo financeiro e movimentações recentes |
+| **Entradas** | Todos | Registro de compras de materiais por fornecedor |
+| **Saídas** | Admin | Registro de vendas com validação de estoque |
+| **Estoque** | Todos | Posição atual de estoque com valor estimado |
+| **Cadastros** | Todos¹ | Materiais (com SKU), parceiros, preços e usuários |
+| **Relatórios** | Todos | Análises com filtros, gráficos e exportação CSV |
+| **Operador** | Todos | Emissão de canhotos (recibos de atendimento) |
+| **Pagamentos** | Todos | Confirmação e cancelamento de canhotos pendentes |
+| **Processamento** | Todos | Conversão interna entre materiais (ex: latinha → alumínio) |
+| **Logs de Auditoria** | Admin | Histórico completo de todas as ações no sistema |
+
+> ¹ Alterar preços e gerenciar usuários é restrito ao perfil Admin.
+
+---
+
+## Stack
+
+- **Python 3.8+**
+- **Streamlit ≥ 1.32** — framework web
+- **PostgreSQL** — banco de dados
+- **psycopg2-binary** — driver PostgreSQL
+- **bcrypt** — hash de senhas
+- **itsdangerous** — assinatura de tokens de sessão
+- **streamlit-cookies-controller** — sessão persistente via cookie
+- **Pandas** — relatórios e exportação CSV
+
+---
 
 ## Estrutura do Projeto
 
 ```
 Sucata/
-├── app.py                      # Aplicação principal com autenticação
-├── db.py                       # Gerenciamento do banco PostgreSQL
+├── app.py                      # Entrada principal + login
+├── auth.py                     # Sessão persistente (cookie assinado)
+├── db.py                       # Schema do banco + context manager
 ├── services.py                 # Lógica de negócio
-├── requirements.txt            # Dependências Python
-├── railway.toml                # Configuração de deploy no Railway
-├── .env.example               # Exemplo de configuração
-├── .env                       # Configuração local (criar a partir do .env.example)
+├── requirements.txt
+├── railway.toml                # Config de deploy (Railway)
+├── .env.example                # Template de variáveis de ambiente
 └── pages/
     ├── 1_📊_Dashboard.py
     ├── 2_📥_Entradas.py
@@ -32,111 +55,104 @@ Sucata/
     ├── 5_📝_Cadastros.py
     ├── 6_📈_Relatórios.py
     ├── 7_🧾_Operador.py
-    └── 8_💳_Pagamentos.py
+    ├── 8_💳_Pagamentos.py
+    ├── 9_🔐_Logs.py
+    └── 10_🔄_Processamento.py
 ```
 
-## Instalação e Execução Local
-
-### Pré-requisitos
-
-- Python 3.8 ou superior
-- PostgreSQL rodando localmente (ou acesso a uma instância remota)
-
-### Passo a Passo
-
-1. **Clone o repositório**:
-
-```bash
-git clone <url-do-repositorio>
-cd Sucata
-```
-
-2. **Crie um ambiente virtual** (recomendado):
-
-```bash
-# Linux/Mac
-python3 -m venv venv
-source venv/bin/activate
-
-# Windows
-python -m venv venv
-venv\Scripts\activate
-```
-
-3. **Instale as dependências**:
-
-```bash
-pip install -r requirements.txt
-```
-
-4. **Configure o arquivo .env**:
-
-```bash
-cp .env.example .env
-```
-
-Edite o `.env` com suas configurações:
-
-```env
-APP_NAME=Sistema de Controle de Sucata
-APP_PASSWORD=suasenhaforteaqui
-DATABASE_URL=postgresql://usuario:senha@localhost:5432/sucata
-```
-
-5. **Execute a aplicação**:
-
-```bash
-streamlit run app.py
-```
-
-6. **Acesse no navegador**: `http://localhost:8501`
-
-## Deploy no Railway
-
-### Passo a Passo
-
-1. **Crie o projeto no Railway**:
-   - Faça login em [railway.app](https://railway.app)
-   - Clique em "New Project" → "Deploy from GitHub repo"
-   - Escolha o repositório do projeto
-
-2. **Adicione o plugin PostgreSQL**:
-   - No painel do projeto, clique em "+ New" → "Database" → "PostgreSQL"
-   - A variável `DATABASE_URL` será injetada automaticamente
-
-3. **Configure as variáveis de ambiente** (em "Variables"):
-   ```
-   APP_NAME=Sistema de Controle de Sucata
-   APP_PASSWORD=suasenhaforteaqui
-   ```
-   > `DATABASE_URL` é configurada automaticamente pelo plugin PostgreSQL — não é necessário adicionar manualmente.
-
-4. **O `railway.toml` já está configurado** com o comando de start correto:
-   ```toml
-   [deploy]
-   startCommand = "streamlit run app.py --server.port $PORT --server.address 0.0.0.0 --server.headless true"
-   ```
-
-5. **Aguarde o deploy** — o Railway detecta o `requirements.txt` e instala as dependências automaticamente.
-
-6. **Primeiro acesso**: O banco de dados (tabelas) é criado automaticamente na primeira inicialização.
+---
 
 ## Banco de Dados
 
-O sistema usa **PostgreSQL**. A conexão é feita via variável de ambiente `DATABASE_URL`.
+O schema é criado automaticamente na primeira inicialização. As migrations também rodam automaticamente ao iniciar, sem precisar de comando manual.
 
-### Tabelas
+| Tabela | Descrição |
+|---|---|
+| `users` | Contas de acesso com hash bcrypt e perfil (admin/operador) |
+| `audit_logs` | Registro imutável de todas as ações realizadas no sistema |
+| `materials` | Materiais cadastrados, com SKU e unidade |
+| `partners` | Parceiros: fornecedores, clientes ou ambos |
+| `transactions` | Entradas e saídas de materiais |
+| `prices` | Preço vigente por material (usado pelo operador) |
+| `canhotos` | Recibos de atendimento emitidos pelo operador |
+| `canhoto_items` | Itens de cada canhoto |
 
-- **materials**: Materiais (alumínio, cobre, ferro, etc.)
-- **partners**: Parceiros (fornecedores e clientes)
-- **transactions**: Transações (entradas e saídas)
-- **prices**: Preços vigentes por material
-- **canhotos**: Recibos de atendimento
-- **canhoto_items**: Itens de cada canhoto
+> Todos os valores monetários são armazenados como `NUMERIC(12,2)` (precisão exata).
 
-### Backup
+---
 
-Use o plugin nativo do Railway ou ferramentas padrão PostgreSQL:
+## Instalação Local
+
+### Pré-requisitos
+
+- Python 3.8+
+- PostgreSQL rodando localmente
+
+### Passo a Passo
+
+```bash
+# 1. Clone o repositório
+git clone <url-do-repositorio>
+cd Sucata
+
+# 2. Crie e ative o ambiente virtual
+python3 -m venv venv
+source venv/bin/activate        # Linux/Mac
+# venv\Scripts\activate         # Windows
+
+# 3. Instale as dependências
+pip install -r requirements.txt
+
+# 4. Configure as variáveis de ambiente
+cp .env.example .env
+# Edite o .env com suas credenciais (veja seção abaixo)
+
+# 5. Inicie a aplicação
+streamlit run app.py
+```
+
+Acesse em: `http://localhost:8501`
+
+**Primeiro acesso:** usuário `admin`, senha `admin`. Troque a senha após o primeiro login.
+
+---
+
+## Variáveis de Ambiente
+
+| Variável | Obrigatória | Descrição |
+|---|---|---|
+| `DATABASE_URL` | **Sim** | URL de conexão PostgreSQL (`postgresql://user:pass@host:5432/db`) |
+| `AUTH_COOKIE_SECRET` | **Sim** | Segredo para assinar tokens de sessão — use uma string longa e aleatória |
+| `APP_NAME` | Não | Nome exibido no cabeçalho (padrão: `Sistema de Controle de Sucata`) |
+| `AUTH_DAYS` | Não | Duração da sessão em dias (padrão: `7`) |
+
+Para gerar um `AUTH_COOKIE_SECRET` seguro:
+```bash
+python -c "import secrets; print(secrets.token_hex(32))"
+```
+
+---
+
+## Deploy no Railway
+
+1. **Crie o projeto**: Railway → "New Project" → "Deploy from GitHub repo"
+
+2. **Adicione o PostgreSQL**: no painel do projeto → "+ New" → "Database" → "PostgreSQL"
+   A variável `DATABASE_URL` é injetada automaticamente.
+
+3. **Configure as variáveis** (em "Variables"):
+   ```
+   AUTH_COOKIE_SECRET=<string gerada acima>
+   APP_NAME=Sistema de Controle de Sucata
+   ```
+
+4. **Deploy automático**: o Railway detecta o `requirements.txt` e o `railway.toml`, sem configuração adicional.
+
+5. **Primeiro acesso**: tabelas criadas automaticamente. Login com `admin` / `admin`.
+
+---
+
+## Backup
 
 ```bash
 # Exportar
@@ -146,43 +162,23 @@ pg_dump $DATABASE_URL > backup_$(date +%Y%m%d).sql
 psql $DATABASE_URL < backup_20260101.sql
 ```
 
-## Segurança
-
-- **Autenticação**: Sistema protegido por senha via variável de ambiente
-- **Validações**: Validação de estoque antes de permitir saídas
-- **Soft Delete**: Materiais e parceiros são desativados, não excluídos permanentemente
-- **Parameterização SQL**: Todas as queries usam `%s` parametrizado (proteção contra SQL injection)
-
-## Tecnologias Utilizadas
-
-- **Python 3.8+**
-- **Streamlit 1.32.0**: Framework web para aplicações de dados
-- **PostgreSQL**: Banco de dados relacional
-- **psycopg2-binary 2.9.9**: Driver PostgreSQL para Python
-- **Pandas 2.2.0**: Manipulação e análise de dados
-- **Python-dotenv 1.0.1**: Gerenciamento de variáveis de ambiente
+---
 
 ## Problemas Comuns
 
-**Erro: "APP_PASSWORD não configurado"**
-- Solução: Defina a variável `APP_PASSWORD` nas variáveis de ambiente (Railway ou `.env` local)
-
 **Erro de conexão com o banco**
-- Verifique se `DATABASE_URL` está corretamente configurada
-- No Railway: confirme que o plugin PostgreSQL está adicionado ao projeto
+- Verifique se `DATABASE_URL` está correta
+- No Railway: confirme que o plugin PostgreSQL está adicionado
 
-**Página não carrega**
-- Verifique se todas as dependências estão instaladas: `pip install -r requirements.txt`
+**Sessão não persiste após F5**
+- Verifique se `AUTH_COOKIE_SECRET` está definido
+- Evite usar o valor padrão do `.env.example` em produção
 
-## Atualizações
-
-```bash
-git pull
-pip install -r requirements.txt --upgrade
-streamlit run app.py
-```
+**Página em branco ou erro 500**
+- Confirme que todas as dependências estão instaladas: `pip install -r requirements.txt`
+- Verifique os logs do Railway para detalhes
 
 ---
 
-**Versão**: 2.0.0 (PostgreSQL)
-**Data**: Fevereiro 2026
+**Versão:** 3.0.0
+**Atualizado:** Março 2026
