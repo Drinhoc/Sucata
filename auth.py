@@ -98,7 +98,5 @@ def require_auth(required_role: str = None) -> None:
         # Parada silenciosa: o componente montado vai disparar um rerun
         st.stop()
 
-    # Confirmado: sem cookie válido
-    st.warning("🔐 Você não está autenticado.")
-    st.info("👆 Acesse a **página inicial** no menu lateral para fazer login.")
-    st.stop()
+    # Confirmado: sem cookie válido — redireciona para o login
+    st.switch_page("app.py")
