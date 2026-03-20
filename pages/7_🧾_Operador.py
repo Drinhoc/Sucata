@@ -45,7 +45,7 @@ if st.session_state.operator_stage == "collecting":
         key="sel_material"
     )
     selected_material = material_options[selected_name]
-    price = selected_material['price_per_kg']
+    price = float(selected_material['price_per_kg'])
 
     if price > 0:
         st.info(f"💲 Preço atual: **R$ {price:.2f}/kg**")

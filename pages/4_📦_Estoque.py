@@ -28,6 +28,8 @@ if not stock_data:
     st.stop()
 
 df = pd.DataFrame(stock_data)
+df['avg_buy_price'] = df['avg_buy_price'].astype(float)
+df['avg_sell_price'] = df['avg_sell_price'].astype(float)
 
 # ============================================
 # RESUMO GERAL
