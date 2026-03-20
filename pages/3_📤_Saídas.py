@@ -40,6 +40,23 @@ is_ajuste = st.checkbox(
     help="Permite remover estoque sem vínculo a comprador. Use apenas para correções administrativas."
 )
 
+# Checagens fora do form — st.stop() aqui não quebra o submit button
+materials = get_all_materials(active_only=True)
+if not materials:
+    st.error("❌ Nenhum material cadastrado. Cadastre materiais primeiro.")
+    st.stop()
+
+partner_options = {}
+if not is_ajuste:
+    partners = get_all_partners(active_only=True, partner_type='cliente')
+    if not partners:
+        st.error("❌ Nenhum cliente cadastrado. Cadastre parceiros primeiro.")
+        st.stop()
+    partner_options = {
+        p['id']: f"{p['name']} ({p['phone']})" if p['phone'] else p['name']
+        for p in partners
+    }
+
 with st.form("form_saida", clear_on_submit=True):
     saida_date = st.date_input(
         "Data da Saída",
@@ -47,11 +64,6 @@ with st.form("form_saida", clear_on_submit=True):
         max_value=date.today(),
         help="Data em que a venda foi realizada"
     )
-
-    materials = get_all_materials(active_only=True)
-    if not materials:
-        st.error("❌ Nenhum material cadastrado. Cadastre materiais primeiro.")
-        st.stop()
 
     material_options = {m['id']: f"{m['name']} ({m['unit']})" for m in materials}
     selected_material = st.selectbox(
@@ -64,21 +76,10 @@ with st.form("form_saida", clear_on_submit=True):
     current_stock = get_current_stock(selected_material)
     st.info(f"📦 Estoque disponível: **{current_stock:.2f} kg**")
 
-    partner_options = {}
     selected_partner = None
-
     if is_ajuste:
         st.warning("🔧 Modo Ajuste Manual — saída sem vínculo a comprador")
     else:
-        partners = get_all_partners(active_only=True, partner_type='cliente')
-        if not partners:
-            st.error("❌ Nenhum cliente cadastrado. Cadastre parceiros primeiro.")
-            st.stop()
-
-        partner_options = {
-            p['id']: f"{p['name']} ({p['phone']})" if p['phone'] else p['name']
-            for p in partners
-        }
         selected_partner = st.selectbox(
             "Cliente",
             options=list(partner_options.keys()),
