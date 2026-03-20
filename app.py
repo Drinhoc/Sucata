@@ -167,5 +167,4 @@ def main():
     st.caption("💡 Use as páginas do menu para gerenciar seu negócio de forma completa!")
 
 
-if __name__ == "__main__":
-    main()
+main()
