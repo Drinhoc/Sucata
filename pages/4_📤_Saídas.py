@@ -40,22 +40,18 @@ is_ajuste = st.checkbox(
     help="Permite remover estoque sem vínculo a comprador. Use apenas para correções administrativas."
 )
 
-# Checagens fora do form — st.stop() aqui não quebra o submit button
+# Só interrompe se não houver materiais — sem forma de preencher o form
 materials = get_all_materials(active_only=True)
 if not materials:
     st.error("❌ Nenhum material cadastrado. Cadastre materiais primeiro.")
     st.stop()
 
-partner_options = {}
-if not is_ajuste:
-    partners = get_all_partners(active_only=True, partner_type='cliente')
-    if not partners:
-        st.error("❌ Nenhum cliente cadastrado. Cadastre parceiros primeiro.")
-        st.stop()
-    partner_options = {
-        p['id']: f"{p['name']} ({p['phone']})" if p['phone'] else p['name']
-        for p in partners
-    }
+# Clientes carregados aqui mas sem st.stop() — erro exibido dentro do form
+partners = get_all_partners(active_only=True, partner_type='cliente')
+partner_options = {
+    p['id']: f"{p['name']} ({p['phone']})" if p['phone'] else p['name']
+    for p in partners
+}
 
 with st.form("form_saida", clear_on_submit=True):
     saida_date = st.date_input(
@@ -79,6 +75,8 @@ with st.form("form_saida", clear_on_submit=True):
     selected_partner = None
     if is_ajuste:
         st.warning("🔧 Modo Ajuste Manual — saída sem vínculo a comprador")
+    elif not partner_options:
+        st.error("❌ Nenhum cliente cadastrado. Cadastre parceiros primeiro ou use o Ajuste Manual.")
     else:
         selected_partner = st.selectbox(
             "Cliente",
@@ -125,7 +123,9 @@ with st.form("form_saida", clear_on_submit=True):
     )
 
     if submitted:
-        if weight > current_stock:
+        if not is_ajuste and not partner_options:
+            st.error("❌ Cadastre um cliente antes de registrar uma saída.")
+        elif weight > current_stock:
             st.error(f"❌ Estoque insuficiente. Disponível: {current_stock:.2f} kg")
         else:
             success, message, transaction_id = create_transaction(
