@@ -218,6 +218,70 @@ def init_database():
             )
         """)
 
+        # Tabela de configuração fiscal do emitente (dados da empresa para NF-e)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS fiscal_config (
+                id              SERIAL PRIMARY KEY,
+                cnpj            TEXT NOT NULL,
+                razao_social    TEXT NOT NULL,
+                nome_fantasia   TEXT,
+                ie              TEXT,
+                crt             TEXT NOT NULL DEFAULT '1'
+                                    CHECK(crt IN ('1', '2', '3')),
+                logradouro      TEXT NOT NULL,
+                numero          TEXT NOT NULL,
+                complemento     TEXT,
+                bairro          TEXT NOT NULL,
+                municipio       TEXT NOT NULL,
+                municipio_ibge  TEXT NOT NULL,
+                uf              TEXT NOT NULL,
+                cep             TEXT NOT NULL,
+                telefone        TEXT,
+                email           TEXT,
+                ambiente        TEXT NOT NULL DEFAULT 'homologacao'
+                                    CHECK(ambiente IN ('homologacao', 'producao')),
+                updated_at      TIMESTAMP DEFAULT NOW()
+            )
+        """)
+
+        # Migrations: campos fiscais nos materiais
+        cursor.execute("ALTER TABLE materials ADD COLUMN IF NOT EXISTS ncm TEXT")
+        cursor.execute("ALTER TABLE materials ADD COLUMN IF NOT EXISTS cfop TEXT")
+        cursor.execute("ALTER TABLE materials ADD COLUMN IF NOT EXISTS csosn TEXT")
+        cursor.execute("ALTER TABLE materials ADD COLUMN IF NOT EXISTS unidade_fiscal TEXT DEFAULT 'KG'")
+
+        # Migrations: campos fiscais e endereço nos parceiros
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS cnpj_cpf TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS ie TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS logradouro TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS numero TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS complemento TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS bairro TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS municipio TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS municipio_ibge TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS uf TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS cep TEXT")
+        cursor.execute("ALTER TABLE partners ADD COLUMN IF NOT EXISTS pais TEXT DEFAULT '1058'")
+
+        # Migrations: rastreamento de NF-e nas transações
+        cursor.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS nf_numero TEXT")
+        cursor.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS nf_serie TEXT DEFAULT '1'")
+        cursor.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM information_schema.columns
+                    WHERE table_name='transactions' AND column_name='nf_chave'
+                ) THEN
+                    ALTER TABLE transactions ADD COLUMN nf_chave TEXT UNIQUE;
+                END IF;
+            END $$;
+        """)
+        cursor.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS nf_status TEXT")
+        cursor.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS nf_danfe_url TEXT")
+        cursor.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS nf_xml_url TEXT")
+        cursor.execute("ALTER TABLE transactions ADD COLUMN IF NOT EXISTS nf_emitida_em TIMESTAMP")
+
         # Índices para melhor performance
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_transactions_date
@@ -232,6 +296,12 @@ def init_database():
         cursor.execute("""
             CREATE INDEX IF NOT EXISTS idx_transactions_material
             ON transactions(material_id)
+        """)
+
+        cursor.execute("""
+            CREATE INDEX IF NOT EXISTS idx_transactions_nf_status
+            ON transactions(nf_status)
+            WHERE nf_status IS NOT NULL
         """)
 
         conn.commit()

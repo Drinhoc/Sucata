@@ -163,26 +163,47 @@ def get_material_by_id(material_id: int) -> Optional[Dict[str, Any]]:
     return results[0] if results else None
 
 
-def create_material(name: str, unit: str = "kg", sku: str = "") -> int:
-    """Cria um novo material"""
-    sku_value = sku.strip().upper() or None
+def create_material(
+    name: str, unit: str = "kg", sku: str = "",
+    ncm: str = "", cfop: str = "", csosn: str = "", unidade_fiscal: str = "KG"
+) -> int:
+    """Cria um novo material com campos fiscais opcionais"""
     query = """
-        INSERT INTO materials (name, unit, sku, active)
-        VALUES (%s, %s, %s, 1)
+        INSERT INTO materials (name, unit, sku, ncm, cfop, csosn, unidade_fiscal, active)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, 1)
     """
-    return execute_insert(query, (name.strip(), unit.strip(), sku_value))
+    return execute_insert(query, (
+        name.strip(), unit.strip(),
+        sku.strip().upper() or None,
+        ncm.strip() or None, cfop.strip() or None,
+        csosn.strip() or None, unidade_fiscal.strip() or "KG",
+    ))
 
 
 def update_material(material_id: int, name: str, unit: str, sku: str = "") -> bool:
-    """Atualiza um material existente"""
-    sku_value = sku.strip().upper() or None
+    """Atualiza nome, unidade e SKU de um material"""
+    query = """
+        UPDATE materials SET name = %s, unit = %s, sku = %s WHERE id = %s
+    """
+    return execute_update(query, (
+        name.strip(), unit.strip(), sku.strip().upper() or None, material_id
+    )) > 0
+
+
+def update_material_fiscal(
+    material_id: int, ncm: str, cfop: str, csosn: str, unidade_fiscal: str
+) -> bool:
+    """Atualiza apenas os campos fiscais de um material"""
     query = """
         UPDATE materials
-        SET name = %s, unit = %s, sku = %s
-        WHERE id = %s
+        SET ncm=%s, cfop=%s, csosn=%s, unidade_fiscal=%s
+        WHERE id=%s
     """
-    rows_affected = execute_update(query, (name.strip(), unit.strip(), sku_value, material_id))
-    return rows_affected > 0
+    return execute_update(query, (
+        ncm.strip() or None, cfop.strip() or None,
+        csosn.strip() or None, unidade_fiscal.strip() or "KG",
+        material_id,
+    )) > 0
 
 
 def deactivate_material(material_id: int) -> bool:
@@ -227,24 +248,54 @@ def get_partner_by_id(partner_id: int) -> Optional[Dict[str, Any]]:
     return results[0] if results else None
 
 
-def create_partner(name: str, partner_type: str, phone: str = "") -> int:
-    """Cria um novo parceiro"""
+def create_partner(
+    name: str, partner_type: str, phone: str = "",
+    cnpj_cpf: str = "", ie: str = "",
+    logradouro: str = "", numero: str = "", complemento: str = "",
+    bairro: str = "", municipio: str = "", municipio_ibge: str = "",
+    uf: str = "", cep: str = "",
+) -> int:
+    """Cria um novo parceiro com campos fiscais opcionais"""
     query = """
-        INSERT INTO partners (name, type, phone, active)
-        VALUES (%s, %s, %s, 1)
+        INSERT INTO partners
+            (name, type, phone, cnpj_cpf, ie, logradouro, numero, complemento,
+             bairro, municipio, municipio_ibge, uf, cep, active)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,1)
     """
-    return execute_insert(query, (name.strip(), partner_type, phone.strip()))
+    return execute_insert(query, (
+        name.strip(), partner_type, phone.strip(),
+        cnpj_cpf.strip() or None, ie.strip() or None,
+        logradouro.strip() or None, numero.strip() or None, complemento.strip() or None,
+        bairro.strip() or None, municipio.strip() or None, municipio_ibge.strip() or None,
+        uf.strip().upper() or None, cep.strip() or None,
+    ))
 
 
 def update_partner(partner_id: int, name: str, partner_type: str, phone: str) -> bool:
-    """Atualiza um parceiro existente"""
+    """Atualiza nome, tipo e telefone de um parceiro"""
+    query = "UPDATE partners SET name=%s, type=%s, phone=%s WHERE id=%s"
+    return execute_update(query, (name.strip(), partner_type, phone.strip(), partner_id)) > 0
+
+
+def update_partner_fiscal(
+    partner_id: int, cnpj_cpf: str, ie: str,
+    logradouro: str, numero: str, complemento: str,
+    bairro: str, municipio: str, municipio_ibge: str, uf: str, cep: str,
+) -> bool:
+    """Atualiza apenas os campos fiscais de um parceiro"""
     query = """
-        UPDATE partners
-        SET name = %s, type = %s, phone = %s
-        WHERE id = %s
+        UPDATE partners SET
+            cnpj_cpf=%s, ie=%s, logradouro=%s, numero=%s, complemento=%s,
+            bairro=%s, municipio=%s, municipio_ibge=%s, uf=%s, cep=%s
+        WHERE id=%s
     """
-    rows_affected = execute_update(query, (name.strip(), partner_type, phone.strip(), partner_id))
-    return rows_affected > 0
+    return execute_update(query, (
+        cnpj_cpf.strip() or None, ie.strip() or None,
+        logradouro.strip() or None, numero.strip() or None, complemento.strip() or None,
+        bairro.strip() or None, municipio.strip() or None, municipio_ibge.strip() or None,
+        uf.strip().upper() or None, cep.strip() or None,
+        partner_id,
+    )) > 0
 
 
 def deactivate_partner(partner_id: int) -> bool:

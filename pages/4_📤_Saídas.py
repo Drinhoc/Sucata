@@ -1,6 +1,6 @@
 """
 Página de Saídas (Vendas)
-Registra a venda de materiais para clientes
+Registra a venda de materiais para clientes e permite emitir NF-e
 """
 
 import streamlit as st
@@ -15,6 +15,7 @@ from services import (
     get_current_stock,
     log_action,
 )
+from nfe_service import emit_nfe, get_nfe_status, cancel_nfe, download_nfe_file
 
 st.set_page_config(page_title="Saídas", page_icon="📤", layout="centered")
 
@@ -162,7 +163,7 @@ with st.form("form_saida", clear_on_submit=True):
 st.markdown("---")
 
 # ============================================
-# HISTÓRICO DE SAÍDAS
+# HISTÓRICO DE SAÍDAS + NF-e
 # ============================================
 
 st.markdown("### 📋 Histórico de Saídas")
@@ -219,6 +220,7 @@ if transactions:
 
     st.markdown("#### Detalhamento")
 
+    # Tabela resumida
     df_display = df[[
         'date', 'material_name', 'partner_name',
         'weight_kg', 'price_per_kg', 'total_value', 'notes'
@@ -231,8 +233,163 @@ if transactions:
         'Data', 'Material', 'Cliente', 'Peso', 'Preço/kg', 'Valor Total', 'Observações'
     ]
     st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    # ============================================
+    # PAINEL NF-e por transação
+    # ============================================
+    st.markdown("---")
+    st.markdown("#### 🧾 Notas Fiscais (NF-e)")
+    st.caption(
+        "Emita, consulte e cancele NF-e para cada saída. "
+        "Configure o emitente em Cadastros → Config. Fiscal antes de emitir."
+    )
+
+    _NF_STATUS_LABEL = {
+        None: ("⬜", "Não emitida"),
+        "autorizada": ("✅", "Autorizada"),
+        "cancelada": ("❌", "Cancelada"),
+        "denegada": ("⛔", "Denegada"),
+        "erro": ("🔴", "Erro"),
+        "processando": ("🔄", "Processando"),
+    }
+
+    for tx in transactions:
+        tx_id = tx['id']
+        nf_status = tx.get('nf_status')
+        nf_numero = tx.get('nf_numero')
+        nf_chave = tx.get('nf_chave')
+        partner_label = tx.get('partner_name') or "Ajuste Manual"
+        mat_label = tx.get('material_name', '?')
+        date_label = tx['date'].strftime('%d/%m/%Y') if hasattr(tx['date'], 'strftime') else str(tx['date'])
+
+        icon, status_label = _NF_STATUS_LABEL.get(nf_status, ("❓", nf_status or "—"))
+        nf_num_label = f"NF {nf_numero}" if nf_numero else "Sem número"
+
+        expander_label = (
+            f"{icon} {date_label} — {mat_label} | {partner_label} | "
+            f"{nf_num_label} ({status_label})"
+        )
+
+        with st.expander(expander_label):
+            col_nf_info, col_nf_act = st.columns([2, 1])
+
+            with col_nf_info:
+                st.caption(f"ID Transação: #{tx_id}")
+                if nf_numero:
+                    st.write(f"**NF-e #{nf_numero}** — Série {tx.get('nf_serie', '1')}")
+                if nf_chave:
+                    st.code(nf_chave, language=None)
+                if tx.get('nf_emitida_em'):
+                    em_str = (
+                        tx['nf_emitida_em'].strftime('%d/%m/%Y %H:%M')
+                        if hasattr(tx['nf_emitida_em'], 'strftime')
+                        else str(tx['nf_emitida_em'])
+                    )
+                    st.caption(f"Emitida em: {em_str}")
+
+            with col_nf_act:
+                # Emitir NF-e (só se ainda não emitida ou em erro)
+                if nf_status not in ('autorizada', 'cancelada', 'denegada', 'processando'):
+                    btn_label = "🔄 Reemitir NF-e" if nf_status == 'erro' else "🧾 Emitir NF-e"
+                    if st.button(btn_label, key=f"emit_{tx_id}", use_container_width=True):
+                        with st.spinner("Emitindo NF-e..."):
+                            ok_e, msg_e, data_e = emit_nfe(tx_id)
+                        if ok_e:
+                            log_action(
+                                st.session_state.get('user_id', 0),
+                                st.session_state.get('username', '?'),
+                                "EMIT_NFE", "transaction", tx_id,
+                                {"status": "autorizada"}
+                            )
+                            st.success(f"✅ {msg_e}")
+                            st.rerun()
+                        else:
+                            st.error(f"❌ {msg_e}")
+
+                # Consultar status
+                if nf_chave:
+                    if st.button("🔍 Consultar status", key=f"status_{tx_id}", use_container_width=True):
+                        with st.spinner("Consultando..."):
+                            ok_s, msg_s = get_nfe_status(tx_id)
+                        if ok_s:
+                            st.success(f"✅ {msg_s}")
+                            st.rerun()
+                        else:
+                            st.warning(f"⚠️ {msg_s}")
+
+            # Downloads DANFE / XML (apenas se autorizada e com chave)
+            if nf_status == 'autorizada' and nf_chave:
+                st.markdown("")
+                col_pdf, col_xml = st.columns(2)
+
+                with col_pdf:
+                    if st.button("📄 Download DANFE (PDF)", key=f"danfe_{tx_id}", use_container_width=True):
+                        with st.spinner("Baixando DANFE..."):
+                            ok_d, content_d, filename_d = download_nfe_file(nf_chave, "pdf")
+                        if ok_d:
+                            st.download_button(
+                                label="💾 Salvar DANFE",
+                                data=content_d,
+                                file_name=filename_d,
+                                mime="application/pdf",
+                                key=f"save_danfe_{tx_id}",
+                                use_container_width=True
+                            )
+                        else:
+                            st.error(f"❌ {filename_d}")
+
+                with col_xml:
+                    if st.button("📋 Download XML", key=f"xml_{tx_id}", use_container_width=True):
+                        with st.spinner("Baixando XML..."):
+                            ok_x, content_x, filename_x = download_nfe_file(nf_chave, "xml")
+                        if ok_x:
+                            st.download_button(
+                                label="💾 Salvar XML",
+                                data=content_x,
+                                file_name=filename_x,
+                                mime="application/xml",
+                                key=f"save_xml_{tx_id}",
+                                use_container_width=True
+                            )
+                        else:
+                            st.error(f"❌ {filename_x}")
+
+            # Cancelar NF-e (apenas se autorizada)
+            if nf_status == 'autorizada' and nf_chave:
+                st.markdown("")
+                with st.expander("⚠️ Cancelar esta NF-e"):
+                    st.warning(
+                        "O cancelamento só é possível dentro do prazo legal (normalmente 24h "
+                        "após a autorização). Após cancelada, não pode ser revertida."
+                    )
+                    with st.form(f"cancel_nfe_{tx_id}"):
+                        justificativa = st.text_area(
+                            "Justificativa *",
+                            placeholder="Mínimo 15 caracteres. Ex: Venda cancelada a pedido do cliente.",
+                            help="Obrigatório pela SEFAZ — mínimo 15 caracteres"
+                        )
+                        if st.form_submit_button(
+                            "❌ Confirmar Cancelamento",
+                            use_container_width=True
+                        ):
+                            if not justificativa or len(justificativa.strip()) < 15:
+                                st.error("❌ A justificativa deve ter pelo menos 15 caracteres")
+                            else:
+                                with st.spinner("Cancelando NF-e..."):
+                                    ok_c, msg_c = cancel_nfe(tx_id, justificativa.strip())
+                                if ok_c:
+                                    log_action(
+                                        st.session_state.get('user_id', 0),
+                                        st.session_state.get('username', '?'),
+                                        "CANCEL_NFE", "transaction", tx_id,
+                                        {"justificativa": justificativa.strip()}
+                                    )
+                                    st.success(f"✅ {msg_c}")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {msg_c}")
 else:
     st.info("📭 Nenhuma saída registrada no período selecionado")
 
 st.markdown("---")
-st.caption("💡 Dica: O sistema impede vendas maiores que o estoque disponível")
+st.caption("💡 Dica: Configure emitente e dados fiscais dos parceiros antes de emitir NF-e")
