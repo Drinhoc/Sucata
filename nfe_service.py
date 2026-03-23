@@ -423,7 +423,7 @@ def emit_nfe(transaction_id: int) -> Tuple[bool, str, Optional[Dict]]:
         data = resp.json()
     except requests.HTTPError as e:
         execute_update(
-            "UPDATE transactions SET nf_status='rejeitada' WHERE id=%s",
+            "UPDATE transactions SET nf_status='erro' WHERE id=%s",
             (transaction_id,)
         )
         try:
@@ -434,7 +434,7 @@ def emit_nfe(transaction_id: int) -> Tuple[bool, str, Optional[Dict]]:
         return False, f"Erro na API Nuvem Fiscal: {detail}", None
     except Exception as e:
         execute_update(
-            "UPDATE transactions SET nf_status='rejeitada' WHERE id=%s",
+            "UPDATE transactions SET nf_status='erro' WHERE id=%s",
             (transaction_id,)
         )
         return False, f"Erro de comunicação: {str(e)}", None
@@ -444,7 +444,7 @@ def emit_nfe(transaction_id: int) -> Tuple[bool, str, Optional[Dict]]:
     c_stat  = str(nota.get("cStat", ""))
     autorizada = c_stat in ("100", "150")
 
-    nf_status = "autorizada" if autorizada else "rejeitada"
+    nf_status = "autorizada" if autorizada else "erro"
     nf_chave  = nota.get("chNFe") or nota.get("chave")
     nf_numero = nota.get("nNF")
 
@@ -497,10 +497,12 @@ def download_nfe_file(nf_chave: str, file_type: str = "pdf") -> Tuple[bool, byte
             url, headers={"Authorization": f"Bearer {token}"}, timeout=20
         )
         resp.raise_for_status()
-        return True, resp.content, mime
+        ext = "pdf" if file_type == "pdf" else "xml"
+        filename = f"nfe_{nf_chave}.{ext}"
+        return True, resp.content, filename
     except Exception as e:
         logging.error(f"[NF-e] Download {file_type} {nf_chave}: {e}")
-        return False, b"", ""
+        return False, b"", f"Erro ao baixar {file_type.upper()}: {str(e)}"
 
 
 # ============================================
@@ -539,8 +541,10 @@ def get_nfe_status(transaction_id: int) -> Tuple[bool, str]:
         return False, f"Erro ao consultar: {str(e)}"
 
     status_map = {
-        "autorizada": "autorizada", "cancelada": "cancelada",
-        "denegada": "rejeitada",    "processando": "processando",
+        "autorizada":  "autorizada",
+        "cancelada":   "cancelada",
+        "denegada":    "denegada",
+        "processando": "processando",
     }
     api_status = data.get("status", "").lower()
     new_status = status_map.get(api_status, rows[0]["nf_status"])
