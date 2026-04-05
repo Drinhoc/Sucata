@@ -477,20 +477,19 @@ def emit_nfe(transaction_id: int) -> Tuple[bool, str, Optional[Dict]]:
 def download_nfe_file(nf_chave: str, file_type: str = "pdf") -> Tuple[bool, bytes, str]:
     """
     Baixa DANFE (PDF) ou XML da NF-e autenticado via Nuvem Fiscal.
-    Retorna (sucesso, bytes, mime_type).
+    Retorna (sucesso, bytes_conteúdo, filename_ou_erro).
     """
     config = get_fiscal_config()
     if not config:
-        return False, b"", ""
+        return False, b"", "Config. fiscal não encontrada."
 
     try:
         token = _get_access_token()
     except RuntimeError as e:
-        return False, b"", ""
+        return False, b"", f"Erro de autenticação: {str(e)}"
 
     base_url = _BASE_URLS.get(config["ambiente"], _BASE_URLS["homologacao"])
     url      = f"{base_url}/nfe/{nf_chave}/{file_type}"
-    mime     = "application/pdf" if file_type == "pdf" else "application/xml"
 
     try:
         resp = requests.get(
