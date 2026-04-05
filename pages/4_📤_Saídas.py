@@ -293,7 +293,7 @@ if transactions:
                     btn_label = "🔄 Reemitir NF-e" if nf_status == 'erro' else "🧾 Emitir NF-e"
                     if st.button(btn_label, key=f"emit_{tx_id}", use_container_width=True):
                         with st.spinner("Emitindo NF-e..."):
-                            ok_e, msg_e, data_e = emit_nfe(tx_id)
+                            ok_e, msg_e, _ = emit_nfe(tx_id)
                         if ok_e:
                             log_action(
                                 st.session_state.get('user_id', 0),

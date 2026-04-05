@@ -14,7 +14,7 @@ import time
 import logging
 import requests
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Dict, Any, Tuple
 
 from db import execute_query, execute_insert, execute_update
@@ -199,11 +199,12 @@ def _build_nfe_payload(
     preco_unit = Decimal(str(transaction["price_per_kg"]))
     v_prod     = (qtd * preco_unit).quantize(Decimal("0.01"))
 
-    # --- Datas ---
-    now_str   = datetime.now().strftime("%Y-%m-%dT%H:%M:%S-03:00")
+    # --- Datas (fuso Brasil/São Paulo = UTC-3) ---
+    tz_br     = timezone(timedelta(hours=-3))
+    now_str   = datetime.now(tz=tz_br).strftime("%Y-%m-%dT%H:%M:%S-03:00")
     saida_str = datetime.combine(
         transaction["date"], datetime.min.time()
-    ).strftime("%Y-%m-%dT00:00:00-03:00")
+    ).replace(tzinfo=tz_br).strftime("%Y-%m-%dT00:00:00-03:00")
 
     # --- ICMS: Simples Nacional (CRT 1/2) usa CSOSN; Regime Normal (CRT 3) usa CST ---
     crt    = config["crt"]
