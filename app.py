@@ -18,9 +18,31 @@ st.set_page_config(
     initial_sidebar_state="auto"
 )
 
+# CSS global: login e home com fonte maior, botões mais fáceis de tocar
+st.markdown("""
+<style>
+/* Botões maiores em toda a aplicação */
+.stButton > button {
+    min-height: 2.8rem !important;
+    font-size: 1.05rem !important;
+    font-weight: 600 !important;
+    border-radius: 10px !important;
+}
+.stButton > button[kind="primary"] {
+    min-height: 3.5rem !important;
+    font-size: 1.15rem !important;
+}
+/* Login: campos maiores */
+div[data-testid="stTextInput"] input {
+    font-size: 1.15rem !important;
+    height: 3rem !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # ============================================
-# T1 — Bootstrap DB (executa UMA VEZ por ciclo de vida do servidor)
+# Bootstrap DB (executa UMA VEZ por ciclo de vida do servidor)
 # ============================================
 
 @st.cache_resource
@@ -33,23 +55,15 @@ def bootstrap_db():
 
 
 # ============================================
-# T2 — Login com sessão persistente via cookie
+# Login com sessão persistente via cookie
 # ============================================
 
 def check_login(controller) -> bool:
-    """
-    Verifica autenticação.
-    1. Já autenticado no session_state → True.
-    2. Cookie válido → restaura sessão → True.
-    3. Sem autenticação → exibe formulário → False.
-    """
     from auth import _restore_from_token, set_auth_cookie, COOKIE_NAME
 
-    # Sessão ativa
     if st.session_state.get("authenticated"):
         return True
 
-    # Tenta restaurar do cookie
     token = controller.get(COOKIE_NAME)
     if token:
         if _restore_from_token(token):
@@ -58,14 +72,27 @@ def check_login(controller) -> bool:
             from auth import clear_auth_cookie
             clear_auth_cookie(controller)
 
-    # Formulário de login
-    st.markdown(f"# ♻️ {APP_NAME}")
-    st.markdown("### 🔐 Login")
-    st.markdown("---")
+    # ---- Tela de Login ----
+    st.markdown(
+        "<div style='text-align:center;padding:20px 0 8px 0;'>"
+        "<span style='font-size:4rem;'>♻️</span>"
+        "</div>",
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        f"<h2 style='text-align:center;margin-bottom:4px;'>{APP_NAME}</h2>",
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        "<p style='text-align:center;color:#666;font-size:1rem;margin-bottom:24px;'>"
+        "Faça login para continuar</p>",
+        unsafe_allow_html=True
+    )
 
-    username = st.text_input("Usuário", placeholder="seu.usuario", key="login_username")
-    password = st.text_input("Senha", type="password", key="login_password")
+    username = st.text_input("👤  Usuário", placeholder="seu.usuario", key="login_username")
+    password = st.text_input("🔑  Senha", type="password", key="login_password")
 
+    st.markdown("")
     if st.button("Entrar", type="primary", use_container_width=True):
         if not username or not password:
             st.error("❌ Preencha usuário e senha")
@@ -89,22 +116,22 @@ def check_login(controller) -> bool:
 
 
 def main():
-    # T1: init banco (cacheado — roda uma única vez)
     bootstrap_db()
 
-    # T2: cookie controller para sessão persistente
     from auth import get_controller, clear_auth_cookie, COOKIE_NAME
     controller = get_controller()
 
     if not check_login(controller):
         return
 
+    is_admin = st.session_state.get("role") == "admin"
+
     # ---- Sidebar ----
     with st.sidebar:
         st.markdown("## ♻️ Menu")
         st.markdown("---")
 
-        role_label = "🔑 Admin" if st.session_state.get("role") == "admin" else "👷 Operador"
+        role_label = "🔑 Admin" if is_admin else "👷 Operador"
         st.markdown(f"👤 **{st.session_state.get('user_name', '')}**")
         st.caption(f"{role_label}  ·  @{st.session_state.get('username', '')}")
 
@@ -118,26 +145,78 @@ def main():
             st.rerun()
 
         st.markdown("---")
-        st.caption("Versão 2.0.0")
+        st.caption("Versão 4.0.0")
 
     # ---- Página inicial ----
-    st.markdown(f"# ♻️ {APP_NAME}")
+    st.markdown(
+        f"<h1 style='text-align:center;'>♻️ {APP_NAME}</h1>",
+        unsafe_allow_html=True
+    )
+    st.markdown(
+        f"<p style='text-align:center;font-size:1.15rem;color:#555;margin-bottom:24px;'>"
+        f"Olá, <b>{st.session_state.get('user_name', '')}</b>! O que vai fazer hoje?</p>",
+        unsafe_allow_html=True
+    )
+
+    # ---- Acesso rápido ----
+    st.markdown("### 🚀 Acesso Rápido")
+
+    # Linha 1 — ações mais usadas
+    col1, col2 = st.columns(2)
+    with col1:
+        st.page_link(
+            "pages/2_🧾_Operador.py",
+            label="🧾  Atender Cliente",
+            use_container_width=True,
+        )
+    with col2:
+        st.page_link(
+            "pages/8_💳_Pagamentos.py",
+            label="💳  Confirmar Pagamento",
+            use_container_width=True,
+        )
+
+    # Linha 2
+    col3, col4 = st.columns(2)
+    with col3:
+        st.page_link(
+            "pages/3_📥_Entradas.py",
+            label="📥  Registrar Entrada",
+            use_container_width=True,
+        )
+    with col4:
+        st.page_link(
+            "pages/5_📦_Estoque.py",
+            label="📦  Ver Estoque",
+            use_container_width=True,
+        )
+
+    # Linha 3 — admin / análise
+    if is_admin:
+        col5, col6 = st.columns(2)
+        with col5:
+            st.page_link(
+                "pages/4_📤_Saídas.py",
+                label="📤  Registrar Saída",
+                use_container_width=True,
+            )
+        with col6:
+            st.page_link(
+                "pages/7_📈_Relatórios.py",
+                label="📈  Relatórios",
+                use_container_width=True,
+            )
+    else:
+        st.page_link(
+            "pages/7_📈_Relatórios.py",
+            label="📈  Ver Relatórios",
+            use_container_width=True,
+        )
+
     st.markdown("---")
-    st.markdown(f"### 👋 Olá, {st.session_state.get('user_name', '')}!")
 
-    st.info("""
-    **📌 Navegue pelas páginas usando o menu lateral:**
-
-    - 📊 **Dashboard**: Visão geral do negócio
-    - 📥 **Entradas**: Registre compras de material
-    - 📤 **Saídas**: Registre vendas de material *(admin)*
-    - 📦 **Estoque**: Consulte o estoque atual
-    - 📝 **Cadastros**: Gerencie materiais e parceiros
-    - 📈 **Relatórios**: Análises e exportações
-    - 🧾 **Operador**: Atendimento ao cliente (canhotos)
-    - 💳 **Pagamentos**: Confirmação de canhotos
-    - 🔄 **Processamento**: Conversão interna de materiais
-    """)
+    # ---- Métricas do mês ----
+    st.markdown("### 📊 Resumo do Mês")
 
     from datetime import datetime
     from services import get_monthly_metrics, get_stock_value_estimate
@@ -146,25 +225,22 @@ def main():
     metrics = get_monthly_metrics(today.year, today.month)
     stock_value = get_stock_value_estimate()
 
-    st.markdown("### 📊 Métricas do Mês Atual")
-
     col1, col2 = st.columns(2)
     with col1:
         st.metric("💰 Compras", f"R$ {metrics['total_purchases']:,.2f}",
-                  delta=f"{metrics['weight_in']:.0f} kg")
+                  delta=f"{metrics['weight_in']:.0f} kg comprados")
     with col2:
         st.metric("💵 Vendas", f"R$ {metrics['total_sales']:,.2f}",
-                  delta=f"{metrics['weight_out']:.0f} kg")
+                  delta=f"{metrics['weight_out']:.0f} kg vendidos")
 
     col3, col4 = st.columns(2)
     with col3:
-        st.metric("📈 Lucro Bruto", f"R$ {metrics['gross_profit']:,.2f}",
-                  delta_color="normal" if metrics["gross_profit"] >= 0 else "inverse")
+        st.metric("📈 Lucro Bruto", f"R$ {metrics['gross_profit']:,.2f}")
     with col4:
         st.metric("📦 Estoque (estimado)", f"R$ {stock_value:,.2f}")
 
     st.markdown("---")
-    st.caption("💡 Use as páginas do menu para gerenciar seu negócio de forma completa!")
+    st.caption("💡 Use o menu lateral para acessar todas as funções do sistema.")
 
 
 main()
